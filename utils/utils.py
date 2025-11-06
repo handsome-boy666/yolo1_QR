@@ -1,13 +1,20 @@
-"""通用工具方法"""
+"""通用工具方法
+
+仅包含与项目无关的基础工具函数，保持精简。
+"""
+from typing import Sequence
 
 
 
-def box_iou(box1, box2):
-    """
-    计算两个框的交并比（IoU）
-    :param box1: 第一个框，格式为 (x1, y1, x2, y2)
-    :param box2: 第二个框，格式为 (x1, y1, x2, y2)
-    :return: 交并比（IoU）
+def box_iou(box1: Sequence[float], box2: Sequence[float]) -> float:
+    """计算两个框的交并比（IoU）。
+
+    参数：
+    - box1: `(x1, y1, x2, y2)`
+    - box2: `(x1, y1, x2, y2)`
+
+    返回：
+    - IoU 浮点数（0~1）
     """
     # 计算交集区域的坐标
     x1 = max(box1[0], box2[0])
@@ -26,6 +33,6 @@ def box_iou(box1, box2):
     # 计算交并比（IoU）
     iou = inter_area / union_area if union_area > 0 else 0.0
 
-    return iou
+    return float(iou)
 
 # 仅保留通用 IoU 函数，预测相关已迁移到 predict.py

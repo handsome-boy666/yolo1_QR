@@ -1,8 +1,22 @@
+"""单图预测脚本与函数
+
+封装 `predict_image` 以便在代码或命令行中使用：
+- 加载 `YOLOv1_QR` 权重；
+- 预处理到指定尺寸；
+- 解析网格输出为像素坐标；
+- 应用简易 NMS；
+- 保存可视化图片与 JSON 结果（满足测试结果保存要求）。
+"""
+
 import os
 import json
 import math
-import argparse
+from typing import List, Tuple, Optional
+import yaml
+from dataclasses import dataclass
+
 import torch
+from torch import Tensor
 from PIL import Image, ImageDraw
 import torchvision.transforms as transforms
 
@@ -10,7 +24,7 @@ from models.yolov1QR import YOLOv1_QR
 from utils.utils import box_iou
 
 
-def draw_boxes(image_path, boxes, scores, output_path, color='red', width=3):
+def draw_boxes(image_path: str, boxes: List[Tuple[float, float, float, float]], scores: List[float], output_path: str, color: str = 'red', width: int = 3) -> Image.Image:
     """
     在图像上绘制多个框并保存。
     :param image_path: 输入图像路径
@@ -31,7 +45,7 @@ def draw_boxes(image_path, boxes, scores, output_path, color='red', width=3):
     return img
 
 
-def _decode_yolo_grid(pred_grid, orig_w, orig_h, S, conf_thresh=0.3):
+def _decode_yolo_grid(pred_grid: Tensor, orig_w: int, orig_h: int, S: int, conf_thresh: float = 0.3) -> Tuple[List[Tuple[float, float, float, float]], List[float]]:
     """
     将模型输出的网格 (S,S,5) 解析为像素级别的框列表。
     pred_grid: Tensor[S,S,5] -> [x_off, y_off, w, h, conf]
@@ -61,7 +75,7 @@ def _decode_yolo_grid(pred_grid, orig_w, orig_h, S, conf_thresh=0.3):
     return boxes, scores
 
 
-def _nms(boxes, scores, iou_thresh=0.5):
+def _nms(boxes: List[Tuple[float, float, float, float]], scores: List[float], iou_thresh: float = 0.5) -> List[int]:
     """简易 NMS，返回保留的索引列表。"""
     if not boxes:
         return []
@@ -75,7 +89,7 @@ def _nms(boxes, scores, iou_thresh=0.5):
     return keep
 
 
-def predict_image(image_path, checkpoint_path, img_size=512, S=4, conf_thresh=0.3, nms_thresh=0.5, output_path=None, device=None, save_json=True):
+def predict_image(image_path: str, checkpoint_path: str, img_size: int = 512, S: int = 4, conf_thresh: float = 0.3, nms_thresh: float = 0.5, output_path: Optional[str] = None, device: Optional[torch.device] = None, save_json: bool = True) -> Tuple[List[Tuple[float, float, float, float]], List[float], str]:
     """
     预测并绘制单张图片。
     - 加载指定 checkpoint
@@ -152,41 +166,94 @@ def predict_image(image_path, checkpoint_path, img_size=512, S=4, conf_thresh=0.
     return boxes, scores, output_path
 
 
-def main():
+def _load_config(path: str) -> dict:
+    with open(path, 'r', encoding='utf-8') as f:
+        return yaml.safe_load(f)
 
-    """
-    python predict.py --image "图片路径" --checkpoint "epoch_048.pth" --img-size 512 --S 4 --conf-thresh 0.2 --nms-thresh 0.5 --device cuda
-    """
-    parser = argparse.ArgumentParser(description='YOLOv1_QR 单图预测')
-    parser.add_argument('--image', required=True, help='输入图片路径')
-    parser.add_argument('--checkpoint', required=True, help='模型权重 .pth 路径')
-    parser.add_argument('--img-size', type=int, default=512, help='输入尺寸，需与训练一致')
-    parser.add_argument('--S', type=int, default=4, help='网格大小，默认4，若模型输出不一致自动覆盖')
-    parser.add_argument('--conf-thresh', type=float, default=0.3, help='置信度阈值')
-    parser.add_argument('--nms-thresh', type=float, default=0.5, help='NMS IoU 阈值')
-    parser.add_argument('--output', default=None, help='输出可视化图片路径')
-    parser.add_argument('--device', default=None, choices=[None, 'cpu', 'cuda'], help='设备选择')
-    parser.add_argument('--no-json', action='store_true', help='不保存 JSON 结果')
-    args = parser.parse_args()
 
-    device = None
-    if args.device == 'cpu':
-        device = torch.device('cpu')
-    elif args.device == 'cuda':
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+def _find_latest_checkpoint(ckpt_dir: str) -> Optional[str]:
+    if not os.path.isdir(ckpt_dir):
+        return None
+    files = [f for f in os.listdir(ckpt_dir) if f.endswith('.pth')]
+    if not files:
+        return None
+    files.sort()
+    return os.path.join(ckpt_dir, files[-1])
 
-    save_json = not args.no_json
+
+def _select_device_from_cfg(device_cfg: str | None) -> torch.device:
+    if device_cfg is None or device_cfg == 'auto':
+        return torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    if device_cfg in ('cuda', 'cpu'):
+        return torch.device(device_cfg)
+    return torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+
+@dataclass
+class PredictConfig:
+    """预测运行所需配置（完全由 config.yaml 提供，无需命令行）。"""
+    image_path: str
+    output_path: Optional[str]
+    save_json: bool
+    checkpoint_path: str
+    img_size: int
+    S: int
+    conf_thresh: float
+    nms_thresh: float
+    device: torch.device
+
+
+def read_predict_config(path: str = './config.yaml') -> PredictConfig:
+    """读取并解析预测配置，并确定最终的 checkpoint 与设备。"""
+    cfg = _load_config(path)
+    pcfg = cfg.get('predict', {})
+    image_path: Optional[str] = pcfg.get('image_path')
+    output_path: Optional[str] = pcfg.get('output_path')
+    save_json: bool = bool(pcfg.get('save_json', True))
+    checkpoint_path: Optional[str] = pcfg.get('checkpoint_path')
+    ckpt_dir: str = pcfg.get('ckpt_dir', './checkpoints')
+    use_latest: bool = bool(pcfg.get('use_latest', True))
+    img_size: int = int(pcfg.get('img_size', 512))
+    S: int = int(pcfg.get('S', 4))
+    conf_thresh: float = float(pcfg.get('conf_thresh', 0.3))
+    nms_thresh: float = float(pcfg.get('nms_thresh', 0.5))
+    device = _select_device_from_cfg(pcfg.get('device', 'auto'))
+
+    if not image_path:
+        raise FileNotFoundError('未指定预测图片路径：请在 config.yaml 的 predict.image_path 填写图片路径。')
+
+    if not checkpoint_path:
+        if use_latest:
+            checkpoint_path = _find_latest_checkpoint(ckpt_dir)
+        if not checkpoint_path:
+            raise FileNotFoundError('未找到可用模型：请在 config.yaml 的 predict.checkpoint_path 指定，或开启 use_latest 并确保 ckpt_dir 中存在模型。')
+
+    return PredictConfig(
+        image_path=image_path,
+        output_path=output_path,
+        save_json=save_json,
+        checkpoint_path=checkpoint_path,
+        img_size=img_size,
+        S=S,
+        conf_thresh=conf_thresh,
+        nms_thresh=nms_thresh,
+        device=device,
+    )
+
+
+def main() -> None:
+    pc = read_predict_config('./config.yaml')
 
     boxes, scores, out = predict_image(
-        image_path=args.image,
-        checkpoint_path=args.checkpoint,
-        img_size=args.img_size,
-        S=args.S,
-        conf_thresh=args.conf_thresh,
-        nms_thresh=args.nms_thresh,
-        output_path=args.output,
-        device=device,
-        save_json=save_json,
+        image_path=pc.image_path,
+        checkpoint_path=pc.checkpoint_path,
+        img_size=pc.img_size,
+        S=pc.S,
+        conf_thresh=pc.conf_thresh,
+        nms_thresh=pc.nms_thresh,
+        output_path=pc.output_path,
+        device=pc.device,
+        save_json=pc.save_json,
     )
 
     print(f'[Predict] 保存可视化到: {out}')

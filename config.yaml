@@ -5,3 +5,18 @@ train:
   batch_size: 16
   num_workers: 4
   epochs: 50
+  learning_rate: 0.0001
+  ckpt_dir: ./checkpoints
+
+predict:
+  # 若提供具体模型路径则使用它；否则当 use_latest: true 时自动使用 ckpt_dir 中最新模型
+  checkpoint_path: E:\my_workspace\yolo1_QR\checkpoints\epoch_050.pth
+  ckpt_dir: ./checkpoints
+  image_path: E:\my_workspace\yolo1_QR\data\images\val\00003284.jpg
+  output_path: E:\my_workspace\yolo1_QR\data\images\val\pred\00003284_pred.jpg
+  use_latest: true
+  device: auto  # auto/cuda/cpu
+  img_size: 512
+  S: 4
+  conf_thresh: 0.35
+  nms_thresh: 0.5

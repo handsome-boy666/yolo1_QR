@@ -1,30 +1,47 @@
-"""
-修改了YOLOv1的模型结构，用于检测二维码
-* S：网格划分数=4
-* B：每个网格预测框数量=2
+"""YOLOv1_QR 模型
+
+简化版 YOLOv1 的特征网络与预测头，面向二维码检测任务。
+- 默认网格大小 `S=4`，输出维度为 `S*S*5`（每个网格 5 个数：x, y, w, h, conf）。
+- 模型设计为单框预测（每格一个框），以满足数据集标签定义与简易训练流程。
+
+说明：
+- 输入为形状 `[B, 3, H, W]` 的图像张量；
+- 前向返回形状 `[B, S*S*5]` 的预测张量；
+- 与 `utils.loss.yolo_v1_loss` 和 `predict.py` 保持一致的接口。
 """
 
 import torch
 import torch.nn as nn
+from torch import Tensor
 
-class ConvBlock(nn.Module):  # 卷积块（卷积层+批量归一化+LeakyReLU）
+class ConvBlock(nn.Module):
+    """卷积块：Conv2d + BatchNorm2d + LeakyReLU。
 
-    def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=None):
-        super().__init__()  # 初始化父类
-        if padding is None:  # 确保padding不为None，输出的尺寸保持不变
+    通过 `padding=(kernel_size-1)//2` 保持空间尺寸。
+    """
+
+    def __init__(self, in_channels: int, out_channels: int, kernel_size: int, stride: int = 1, padding: int | None = None) -> None:
+        super().__init__()
+        if padding is None:
             padding = (kernel_size - 1) // 2
         self.block = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding),  # 卷积层
-            nn.BatchNorm2d(out_channels),  # 批量归一化
-            nn.LeakyReLU(0.1, inplace=True)  # LeakyReLU激活函数，负斜率为0.1
+            nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding),
+            nn.BatchNorm2d(out_channels),
+            nn.LeakyReLU(0.1, inplace=True),
         )
 
-    def forward(self, x):
-        return self.block(x)  # 前向传播：通过卷积块
+    def forward(self, x: Tensor) -> Tensor:
+        return self.block(x)
 
 
-class YOLOv1_QR(nn.Module):  # YOLOv1模型（二维码检测）
-    def __init__(self):
+class YOLOv1_QR(nn.Module):
+    """简化 YOLOv1 的二维码检测模型。
+
+    - 特征提取网络逐步下采样至 4x4 特征图；
+    - 预测头展平特征后通过全连接得到 `4*4*5` 输出。
+    """
+
+    def __init__(self) -> None:
         super().__init__()
         # 特征提取网络：逐步下采样并提取图像特征
         self.features = nn.Sequential(
@@ -62,11 +79,20 @@ class YOLOv1_QR(nn.Module):  # YOLOv1模型（二维码检测）
             nn.Linear(4 * 4 * 1024, 2048),  # 全连接层，降维至2048
             nn.LeakyReLU(0.1, inplace=True),  # LeakyReLU激活
             nn.Dropout(0.5),  # Dropout，防止过拟合
-            nn.Linear(2048, 4 * 4 * 5)  # 输出层：4x4网格，每网格5个值（x,y,w,h,confidence）
+            nn.Linear(2048, 4 * 4 * 5),  # 输出层：4x4网格，每网格5个值（x,y,w,h,confidence）
+            nn.Sigmoid()  # 将输出映射到(0,1)，确保confidence在(0,1)之间
         )
 
-    def forward(self, x):
-        feat = self.features(x)  # 特征提取
-        out = self.pred(feat)  # 预测输出
-        return out  # 返回预测结果
+    def forward(self, x: Tensor) -> Tensor:
+        """前向计算。
+
+        参数：
+        - x: `[B, 3, H, W]`
+
+        返回：
+        - `[B, S*S*5]` 的预测向量（默认 S=4）
+        """
+        feat = self.features(x)
+        out = self.pred(feat)
+        return out
 

@@ -1,16 +1,31 @@
+"""二维码数据集封装
+
+自动匹配 `images` 与 `labels`（支持 `train` 子目录），仅收集合法图片，按同名配对标签。
+标签格式遵循常见 YOLO 格式：`class x y w h`（均为 [0,1] 范围）。
+输出目标张量形状为 `(S, S, 5)`：`(x_offset, y_offset, w, h, conf)`。
+"""
+
 import os
+from typing import List, Tuple, Optional
+
 import torch
+from torch import Tensor
 from torch.utils.data import Dataset
 from PIL import Image
 import torchvision.transforms as transforms
 
 
 class QRCodeDataset(Dataset):
+    """二维码数据集。
+
+    参数：
+    - data_dir: 数据根目录，包含 `images/` 与 `labels/`（可含 `train/` 子目录）。
+    - img_size: 训练/推理的输入尺寸（会进行 `Resize`）。
+    - S: 网格大小（默认 4）。
+    - transform: 自定义 `torchvision` 变换，若为 `None` 则使用默认（`Resize+ToTensor`）。
     """
-    自定义数据集：自动识别 train 子目录或根目录，仅收集图片文件并按同名标签配对。
-    输出标签张量形状为 (S, S, 5): [x_offset, y_offset, w, h, conf]
-    """
-    def __init__(self, data_dir, img_size=512, S=4, transform=None):
+
+    def __init__(self, data_dir: str, img_size: int = 512, S: int = 4, transform: Optional[transforms.Compose] = None) -> None:
         self.data_dir = data_dir
         self.img_size = img_size
         self.S = S
@@ -31,7 +46,7 @@ class QRCodeDataset(Dataset):
         image_files = [f for f in os.listdir(self.image_dir) if os.path.splitext(f)[1].lower() in img_exts]
         label_names = {os.path.splitext(f)[0] for f in os.listdir(self.label_dir) if f.lower().endswith('.txt')}
 
-        self.samples = []
+        self.samples: List[Tuple[str, str]] = []
         for img_file in sorted(image_files):
             name = os.path.splitext(img_file)[0]
             if name in label_names:
@@ -51,7 +66,7 @@ class QRCodeDataset(Dataset):
     def __len__(self):
         return len(self.samples)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int) -> Tuple[Tensor, Tensor]:
         img_path, label_path = self.samples[idx]
 
         if not os.path.isfile(img_path):

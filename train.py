@@ -1,3 +1,12 @@
+"""训练脚本
+
+封装训练流程：读取配置、数据加载、损失计算、优化器更新与检查点保存。
+满足以下要求：
+- 每个 epoch 保存模型；
+- 运行前检查是否有检查点并询问是否继续训练；
+- tqdm 进度条显示 batch 级损失；
+"""
+
 import os
 import yaml
 import torch
@@ -9,20 +18,36 @@ from utils.datasets import QRCodeDataset
 from utils.loss import yolo_v1_loss
 
 
-def load_config(path: str):
+def read_train_config(path: str) -> tuple[str, int, int, int, int, int, float, str]:
+    """读取并解析训练配置。
+
+    返回值依次为:
+    data_dir, img_size, S, batch_size, num_workers, epochs, learning_rate, ckpt_dir
+    """
     with open(path, 'r', encoding='utf-8') as f:
-        return yaml.safe_load(f)
+        cfg = yaml.safe_load(f)
+    tcfg = cfg.get('train', {})
+    data_dir = tcfg.get('data_dir')
+    img_size = int(tcfg.get('img_size'))
+    S = int(tcfg.get('S'))
+    batch_size = int(tcfg.get('batch_size'))
+    num_workers = int(tcfg.get('num_workers'))
+    epochs = int(tcfg.get('epochs'))
+    learning_rate = float(tcfg.get('learning_rate'))
+    ckpt_dir = str(tcfg.get('ckpt_dir'))
+    return data_dir, img_size, S, batch_size, num_workers, epochs, learning_rate, ckpt_dir
 
 
-def get_device():
+def get_device() -> torch.device:
     return torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
-def ensure_dir(path: str):
+def ensure_dir(path: str) -> None:
     os.makedirs(path, exist_ok=True)
 
 
-def find_latest_checkpoint(ckpt_dir: str):
+def find_latest_checkpoint(ckpt_dir: str) -> str | None:
+    """查找最新检查点"""
     if not os.path.isdir(ckpt_dir):
         return None
     files = [f for f in os.listdir(ckpt_dir) if f.endswith('.pth')]
@@ -33,7 +58,8 @@ def find_latest_checkpoint(ckpt_dir: str):
     return os.path.join(ckpt_dir, files[-1])
 
 
-def save_checkpoint(ckpt_dir: str, epoch: int, model: torch.nn.Module, optimizer: torch.optim.Optimizer):
+def save_checkpoint(ckpt_dir: str, epoch: int, model: torch.nn.Module, optimizer: torch.optim.Optimizer) -> None:
+    """保存检查点"""
     ensure_dir(ckpt_dir)
     path = os.path.join(ckpt_dir, f'epoch_{epoch:03d}.pth')
     torch.save({
@@ -44,7 +70,8 @@ def save_checkpoint(ckpt_dir: str, epoch: int, model: torch.nn.Module, optimizer
     print(f'[Checkpoint] 已保存到: {path}')
 
 
-def train_one_epoch(model, dataloader, optimizer, device, S, epoch=None):
+def train_one_epoch(model: torch.nn.Module, dataloader: DataLoader, optimizer: torch.optim.Optimizer, device: torch.device, S: int, epoch: int | None = None) -> float:
+    """训练一个 epoch"""
     model.train()
     total_loss = 0.0
     iterator = tqdm(dataloader, desc=(f"Epoch {epoch}" if epoch is not None else "Training"), leave=False)
@@ -65,30 +92,31 @@ def train_one_epoch(model, dataloader, optimizer, device, S, epoch=None):
     return total_loss / max(1, len(dataloader))
 
 
-def main():
-    # 加载配置
-    cfg = load_config('./config.yaml')
-    tcfg = cfg.get('train', {})
-    data_dir = tcfg.get('data_dir', './data')
-    img_size = int(tcfg.get('img_size', 512))
-    S = int(tcfg.get('S', 4))
-    batch_size = int(tcfg.get('batch_size', 16))
-    num_workers = int(tcfg.get('num_workers', 0))
-    epochs = int(tcfg.get('epochs', 50))
-
-    device = get_device()
-    print(f'[Config] device={device}, data_dir={data_dir}, img_size={img_size}, S={S}, batch_size={batch_size}, epochs={epochs}')
-
-    # 数据集与加载器
+def build_dataloader(data_dir: str, img_size: int, S: int, batch_size: int, num_workers: int, device: torch.device) -> DataLoader:
+    """构建数据集与数据加载器"""
     dataset = QRCodeDataset(data_dir=data_dir, img_size=img_size, S=S)
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=(device.type == 'cuda'))
+    return DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=(device.type == 'cuda'),
+    )
 
-    # 模型与优化器
+
+def build_model_and_optimizer(device: torch.device, learning_rate: float) -> tuple[torch.nn.Module, torch.optim.Optimizer]:
+    """创建模型与优化器"""
     model = YOLOv1_QR().to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    return model, optimizer
 
-    # 检查已有模型，询问是否继续训练
-    ckpt_dir = os.path.join('.', 'checkpoints')
+
+def maybe_resume(ckpt_dir: str, model: torch.nn.Module, optimizer: torch.optim.Optimizer, device: torch.device) -> int:
+    """检查已有检查点并根据用户选择决定是否从最近检查点继续训练。
+
+    返回开始的 epoch 序号。
+    """
+    ensure_dir(ckpt_dir)
     latest = find_latest_checkpoint(ckpt_dir)
     start_epoch = 1
     if latest is not None:
@@ -105,14 +133,35 @@ def main():
             print(f'[Resume] 从第 {start_epoch} 个 epoch 开始训练。')
         else:
             print('[Resume] 选择不继续训练，将从头开始。')
+    return start_epoch
 
-    # 训练循环
+
+def run_training(model: torch.nn.Module, dataloader: DataLoader, optimizer: torch.optim.Optimizer, device: torch.device, S: int, start_epoch: int, epochs: int, ckpt_dir: str) -> None:
+    """执行训练循环并在每个 epoch 保存检查点"""
     for epoch in range(start_epoch, epochs + 1):
         avg_loss = train_one_epoch(model, dataloader, optimizer, device, S, epoch)
         print(f'Epoch [{epoch}/{epochs}] - loss: {avg_loss:.4f}')
-
-        # 每个 epoch 保存模型
         save_checkpoint(ckpt_dir, epoch, model, optimizer)
+
+
+def main() -> None:
+    # 加载配置
+    data_dir, img_size, S, batch_size, num_workers, epochs, learning_rate, ckpt_dir = read_train_config('./config.yaml')
+
+    device = get_device()
+    print(f'[Config] device={device}, data_dir={data_dir}, img_size={img_size}, S={S}, batch_size={batch_size}, epochs={epochs}')
+
+    # 数据集与加载器
+    dataloader = build_dataloader(data_dir, img_size, S, batch_size, num_workers, device)
+
+    # 模型与优化器
+    model, optimizer = build_model_and_optimizer(device, learning_rate)
+
+    # 断点续训选择
+    start_epoch = maybe_resume(ckpt_dir, model, optimizer, device)
+
+    # 训练循环
+    run_training(model, dataloader, optimizer, device, S, start_epoch, epochs, ckpt_dir)
 
 
 if __name__ == '__main__':
