@@ -1,0 +1,7 @@
+train:
+  data_dir: ./data
+  img_size: 512
+  S: 4
+  batch_size: 16
+  num_workers: 4
+  epochs: 50
