@@ -29,24 +29,21 @@ def yolo_v1_loss(pred: Tensor, target: Tensor, S: int = 4, lambda_coord: float =
     """
     if pred.dim() != 2:
         raise ValueError("pred 应为二维张量，形状 [B, S*S*5]")
-    B = pred.size(0)
-    pred = pred.view(B, S, S, 5)
+    batch_size = pred.size(0)
+    pred = pred.view(batch_size, S, S, 5)  # 转换为 [B, S, S, 5] 形状
 
-    obj_mask = target[..., 4] > 0.5
-    noobj_mask = ~obj_mask
+    obj_mask = target[..., 4] > 0.5  # 有目标的网格
+    noobj_mask = ~obj_mask  # 无目标的网格
 
-    # 坐标与尺寸损失，仅对有目标的网格
-    coord_loss = ((pred[..., 0:2] - target[..., 0:2]) ** 2).sum(dim=-1)
-    # 对 w/h 使用 clamp+sqrt，避免负值导致 sqrt NaN
-    pred_wh = torch.clamp(pred[..., 2:4], min=1e-6)
-    target_wh = target[..., 2:4]  # 不对 target_wh 做 clamp
-    wh_loss = ((torch.sqrt(pred_wh) - torch.sqrt(target_wh)) ** 2).sum(dim=-1)
+    # 边框坐标损失
+    coord_loss = ((pred[..., 0:2] - target[..., 0:2]) ** 2).sum(dim=-1) 
+    wh_loss = ((torch.sqrt(pred[..., 2:4]) - torch.sqrt(target[..., 2:4])) ** 2).sum(dim=-1)
     coord_total = (coord_loss + wh_loss)[obj_mask].sum()
 
-    # 置信度损失（对预测再做一次防御）
-    conf_pred = torch.nan_to_num(pred[..., 4], nan=0.0, posinf=1e4, neginf=-1e4)
+    # 置信度损失
+    conf_pred = pred[..., 4]
     obj_conf_loss = ((conf_pred - target[..., 4]) ** 2)[obj_mask].sum()
     noobj_conf_loss = ((conf_pred) ** 2)[noobj_mask].sum()
 
     total = lambda_coord * coord_total + obj_conf_loss + lambda_noobj * noobj_conf_loss
-    return total / max(B, 1)    # 归一化，防止 batch_size 为 0 时除零错误
+    return total / batch_size    # 归一化，防止 batch_size 为 0 时除零错误

@@ -1,5 +1,5 @@
 train:
-  data_dir: ./data
+  data_dir: ./dataset
   img_size: 512
   S: 4
   batch_size: 16

@@ -14,8 +14,8 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from models.yolov1QR import YOLOv1_QR
-from utils.datasets import QRCodeDataset
-from utils.loss import yolo_v1_loss
+from data.datasets import QRCodeDataset
+from models.loss import yolo_v1_loss
 
 
 def read_train_config(path: str) -> tuple[str, int, int, int, int, int, float, str]:
