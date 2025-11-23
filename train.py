@@ -92,9 +92,9 @@ def train_one_epoch(model: torch.nn.Module, dataloader: DataLoader, optimizer: t
     return total_loss / max(1, len(dataloader))
 
 
-def build_dataloader(data_dir: str, img_size: int, S: int, batch_size: int, num_workers: int, device: torch.device) -> DataLoader:
+def build_dataloader(data_dir, img_size, S, batch_size, num_workers, device: torch.device, if_train = True) -> DataLoader:
     """构建数据集与数据加载器"""
-    dataset = QRCodeDataset(data_dir=data_dir, img_size=img_size, S=S)
+    dataset = QRCodeDataset(data_dir=data_dir, img_size=img_size, S=S, if_train=if_train)
     return DataLoader(
         dataset,
         batch_size=batch_size,

@@ -25,26 +25,27 @@ class QRCodeDataset(Dataset):
     - transform: 自定义 `torchvision` 变换，若为 `None` 则使用默认（`Resize+ToTensor`）。
     """
 
-    def __init__(self, data_dir: str, img_size: int = 512, S: int = 4, transform: Optional[transforms.Compose] = None) -> None:
+    def __init__(self, data_dir, img_size = 512, S = 4, if_train = True):
         self.data_dir = data_dir
         self.img_size = img_size
         self.S = S
 
         image_root = os.path.join(data_dir, 'images')
         label_root = os.path.join(data_dir, 'labels')
-        image_dir_train = os.path.join(image_root, 'train')
-        label_dir_train = os.path.join(label_root, 'train')
 
-        if os.path.isdir(image_dir_train) and os.path.isdir(label_dir_train):
-            self.image_dir = image_dir_train
-            self.label_dir = label_dir_train
+        if os.path.isdir(image_root) and os.path.isdir(label_root):
+            if if_train:
+                self.image_dir = os.path.join(image_root, 'train')
+                self.label_dir = os.path.join(label_root, 'train')
+            else:
+                self.image_dir  = os.path.join(image_root, 'test')
+                self.label_dir = os.path.join(label_root, 'test')
         else:
-            self.image_dir = image_root
-            self.label_dir = label_root
+            raise FileNotFoundError("数据集目录不存在")
 
         img_exts = {'.jpg', '.jpeg', '.png', '.bmp', '.webp'}
-        image_files = [f for f in os.listdir(self.image_dir) if os.path.splitext(f)[1].lower() in img_exts]
-        label_names = {os.path.splitext(f)[0] for f in os.listdir(self.label_dir) if f.lower().endswith('.txt')}
+        image_files = [f for f in os.listdir(self.image_dir) if os.path.splitext(f)[1].lower() in img_exts]    # 收集所有图片文件
+        label_names = {os.path.splitext(f)[0] for f in os.listdir(self.label_dir) if f.lower().endswith('.txt')}    # 收集所有标签文件（不包含扩展名）
 
         self.samples: List[Tuple[str, str]] = []
         for img_file in sorted(image_files):
@@ -58,7 +59,8 @@ class QRCodeDataset(Dataset):
         if len(self.samples) == 0:
             raise FileNotFoundError(f"在 '{self.image_dir}' 与 '{self.label_dir}' 下未找到配对的图片与标签文件")
 
-        self.transform = transform or transforms.Compose([
+        # 构建数据集变换
+        self.transform = transforms.Compose([
             transforms.Resize((self.img_size, self.img_size)),
             transforms.ToTensor(),
         ])

@@ -27,7 +27,7 @@ class ConvBlock(nn.Module):
         self.block = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding),
             nn.BatchNorm2d(out_channels),
-            nn.LeakyReLU(0.1, inplace=True),
+            nn.LeakyReLU(0.1, inplace=True),    # 0.1 负斜率，原地操作（不占用额外内存）
         )
 
     def forward(self, x: Tensor) -> Tensor:
