@@ -76,16 +76,16 @@ class QRCodeDataset(Dataset):
         img = Image.open(img_path).convert('RGB')
         img = self.transform(img)
 
-        target = torch.zeros(self.S, self.S, 5)
+        target = torch.zeros(self.S, self.S, 5) #(S, S, 5) 网格，每个单元格包含 (x_offset, y_offset, w, h, conf)
 
         if os.path.isfile(label_path):
             with open(label_path, 'r') as f:
                 for line in f:
-                    parts = line.strip().split()
+                    parts = line.strip().split()    # 分割行内容为列表
                     if len(parts) != 5:
                         continue
                     try:
-                        _, x, y, w, h = map(float, parts)
+                        _, x, y, w, h = map(float, parts)    # 解析类别、中心坐标、宽高
                     except Exception:
                         continue
                     # 过滤非有限值，避免 NaN/Inf
@@ -93,11 +93,11 @@ class QRCodeDataset(Dataset):
                         continue
                     # 夹紧到有效范围（避免 x==1 导致 i==S 越界）
                     eps = 1e-6
-                    x = float(max(0.0, min(1.0 - eps, x)))
-                    y = float(max(0.0, min(1.0 - eps, y)))
-                    w = float(max(eps, min(1.0, w)))
-                    h = float(max(eps, min(1.0, h)))
-                    i = int(self.S * x)
+                    x = float(max(0.0, min(1.0 - eps, x)))  # 夹紧到 [0, 1-eps]
+                    y = float(max(0.0, min(1.0 - eps, y)))  # 夹紧到 [0, 1-eps]
+                    w = float(max(eps, min(1.0, w)))  # 夹紧到 [eps, 1]
+                    h = float(max(eps, min(1.0, h)))  # 夹紧到 [eps, 1]
+                    i = int(self.S * x) 
                     j = int(self.S * y)
                     if 0 <= i < self.S and 0 <= j < self.S:
                         target[j, i, 0] = self.S * x - i
