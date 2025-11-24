@@ -12,6 +12,8 @@ import yaml
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+from utils.logger import init_run_logger
+from utils.trainer import maybe_resume, run_training
 
 from models.yolov1QR import YOLOv1_QR
 from data.datasets import QRCodeDataset
@@ -35,90 +37,17 @@ def read_train_config(path: str) -> tuple[str, int, int, int, int, int, float, s
     num_workers = int(tcfg.get('num_workers'))
     epochs = int(tcfg.get('epochs'))
     learning_rate = float(tcfg.get('learning_rate'))
-    ckpt_dir = str(tcfg.get('ckpt_dir'))
-    return data_dir, img_size, S, batch_size, num_workers, epochs, learning_rate, ckpt_dir
+    log_dir = str(tcfg.get('log_dir'))
+    return data_dir, img_size, S, batch_size, num_workers, epochs, learning_rate, log_dir
 
-def maybe_resume(ckpt_dir: str, model: torch.nn.Module, optimizer: torch.optim.Optimizer, device: torch.device) -> int:
-    """检查已有检查点并根据用户选择决定是否从最近检查点继续训练。
-
-    返回开始的 epoch 序号。
-    """
-    os.makedirs(ckpt_dir, exist_ok=True)
-
-    # 查找最新检查点
-    if not os.path.isdir(ckpt_dir):
-        latest = None
-    else:
-        files = [f for f in os.listdir(ckpt_dir) if f.endswith('.pth')]
-        if not files:
-            latest = None
-        else:
-            files.sort()
-            latest = os.path.join(ckpt_dir, files[-1])
-
-    start_epoch = 1
-    if latest is not None:
-        print(f'[Resume] 检测到已有模型: {latest}')
-        ans = input('检测到已有模型，是否继续训练(加载最近检查点)? (y/n): ').strip().lower()
-        if ans == 'y':
-            state = torch.load(latest, map_location=device)
-            model.load_state_dict(state['model_state'])
-            try:
-                optimizer.load_state_dict(state['optimizer_state'])
-            except Exception:
-                print('[Resume] 优化器状态加载失败，使用新优化器继续。')
-            start_epoch = int(state.get('epoch', 0)) + 1
-            print(f'[Resume] 从第 {start_epoch} 个 epoch 开始训练。')
-        else:
-            print('[Resume] 选择不继续训练，将从头开始。')
-    return start_epoch
-
-def train_one_epoch(model: torch.nn.Module, dataloader: DataLoader, optimizer: torch.optim.Optimizer, device: torch.device, S: int, epoch: int | None = None) -> float:
-    """训练一个 epoch"""
-    model.train()
-    total_loss = 0.0
-    iterator = tqdm(dataloader, desc=(f"Epoch {epoch}" if epoch is not None else "Training"), leave=False)  # 进度条
-    for images, targets in iterator:
-        images = images.to(device)
-        targets = targets.to(device)
-
-        preds = model(images)  # [B, S*S*5]
-        loss = yolo_v1_loss(preds, targets, S=S)
-
-        optimizer.zero_grad()
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=10.0)   # 梯度裁剪
-        optimizer.step()
-
-        total_loss += loss.item()
-        iterator.set_postfix(loss=f"{loss.item():.4f}") # 显示当前 batch 损失
-    return total_loss / max(1, len(dataloader))
-
-def save_checkpoint(ckpt_dir: str, epoch: int, model: torch.nn.Module, optimizer: torch.optim.Optimizer) -> None:
-    """保存检查点"""
-    os.makedirs(ckpt_dir, exist_ok=True)
-    path = os.path.join(ckpt_dir, f'epoch_{epoch:03d}.pth')
-    torch.save({
-        'epoch': epoch,
-        'model_state': model.state_dict(),
-        'optimizer_state': optimizer.state_dict(),
-    }, path)
-    print(f'[Checkpoint] 已保存到: {path}')
-
-def run_training(model: torch.nn.Module, dataloader: DataLoader, optimizer: torch.optim.Optimizer, device: torch.device, S: int, start_epoch: int, epochs: int, ckpt_dir: str) -> None:
-    """执行训练循环并在每个 epoch 保存检查点"""
-    for epoch in range(start_epoch, epochs + 1):
-        avg_loss = train_one_epoch(model, dataloader, optimizer, device, S, epoch)
-        print(f'Epoch [{epoch}/{epochs}] - loss: {avg_loss:.4f}')
-        save_checkpoint(ckpt_dir, epoch, model, optimizer)
 
 
 def main() -> None:
     # 加载配置
-    data_dir, img_size, S, batch_size, num_workers, epochs, learning_rate, ckpt_dir = read_train_config('./config.yaml')
+    data_dir, img_size, S, batch_size, num_workers, epochs, learning_rate, log_dir = read_train_config('./config.yaml')
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f'[Config] device={device}, data_dir={data_dir}, img_size={img_size}, S={S}, batch_size={batch_size}, epochs={epochs}')
+    logger, run_dir, ckpt_dir, recorder = init_run_logger(log_dir, device, data_dir, img_size, S, batch_size, epochs)
 
     # 数据集与加载器
     dataset = QRCodeDataset(data_dir=data_dir, img_size=img_size, S=S, if_train=True)
@@ -135,10 +64,10 @@ def main() -> None:
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
     # 断点续训选择
-    start_epoch = maybe_resume(ckpt_dir, model, optimizer, device)
+    start_epoch = maybe_resume(log_dir, model, optimizer, device, logger)
 
     # 训练循环
-    run_training(model, dataloader, optimizer, device, S, start_epoch, epochs, ckpt_dir)
+    run_training(model, dataloader, optimizer, device, S, start_epoch, epochs, ckpt_dir, logger, recorder)
 
 
 if __name__ == '__main__':
