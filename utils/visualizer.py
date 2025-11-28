@@ -8,7 +8,7 @@ def load_jsonl(path: str) -> List[Dict]:
     data = []
     with open(path, "r", encoding="utf-8") as f:
         for line in f:
-            line = line.strip()
+            line = line.strip()  # 移除行尾的换行符
             if not line:
                 continue
             try:
@@ -17,10 +17,10 @@ def load_jsonl(path: str) -> List[Dict]:
                 pass
     return data
 
-def plot_run(run_dir: str, save_dir: Optional[str] = None) -> None:
+def plot_run(run_dir, save_dir: Optional[str] = None) -> None:
     import matplotlib.pyplot as plt
-    metrics = load_jsonl(os.path.join(run_dir, "metrics.jsonl"))
-    batches = load_jsonl(os.path.join(run_dir, "batches.jsonl"))
+    metrics = load_jsonl(os.path.join(run_dir, "metrics.jsonl"))    # 加载指标数据
+    batches = load_jsonl(os.path.join(run_dir, "batches.jsonl"))    # 加载批次数据
     if not metrics:
         return
     epochs = [m.get("epoch", 0) for m in metrics]

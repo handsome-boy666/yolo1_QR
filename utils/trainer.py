@@ -10,7 +10,7 @@ from utils.utils import DetectionMetrics
 from utils.logger import get_lr
 
 
-def maybe_resume(search_dir, model: torch.nn.Module, optimizer: torch.optim.Optimizer, device: torch.device, logger) -> int:
+def maybe_resume(search_dir, model, optimizer, device, logger) -> int:
     os.makedirs(search_dir, exist_ok=True)
     if not os.path.isdir(search_dir):
         latest = None
@@ -47,7 +47,7 @@ def maybe_resume(search_dir, model: torch.nn.Module, optimizer: torch.optim.Opti
     return start_epoch
 
 
-def save_checkpoint(ckpt_dir: str, epoch: int, model: torch.nn.Module, optimizer: torch.optim.Optimizer, logger) -> None:
+def save_checkpoint(ckpt_dir, epoch: int, model, optimizer, logger) -> None:
     os.makedirs(ckpt_dir, exist_ok=True)
     path = os.path.join(ckpt_dir, f'epoch_{epoch:03d}.pth')
     torch.save({
@@ -58,7 +58,7 @@ def save_checkpoint(ckpt_dir: str, epoch: int, model: torch.nn.Module, optimizer
     logger.info(f'[Checkpoint] 已保存到: {path}')
 
 
-def train_one_epoch(model: torch.nn.Module, dataloader: DataLoader, optimizer: torch.optim.Optimizer, device: torch.device, S: int, epoch: Optional[int] = None, metrics: Optional[DetectionMetrics] = None, recorder=None) -> float:
+def train_one_epoch(model, dataloader, optimizer, device, S, epoch: Optional[int] = None, metrics: Optional[DetectionMetrics] = None, recorder=None) -> float:
     model.train()
     total_loss = 0.0
     iterator = tqdm(dataloader, desc=(f"Epoch {epoch}" if epoch is not None else "Training"), leave=False)
@@ -83,7 +83,7 @@ def train_one_epoch(model: torch.nn.Module, dataloader: DataLoader, optimizer: t
     return total_loss / max(1, len(dataloader))
 
 
-def run_training(model: torch.nn.Module, dataloader: DataLoader, optimizer: torch.optim.Optimizer, device: torch.device, S: int, start_epoch: int, epochs: int, ckpt_dir: str, logger, recorder) -> None:
+def run_training(model, dataloader, optimizer, device, S, start_epoch, epochs, ckpt_dir, logger, recorder) -> None:
     for epoch in range(start_epoch, epochs + 1):
         metrics = DetectionMetrics(iou_thresh=0.5, conf_thresh=0.5)
         avg_loss = train_one_epoch(model, dataloader, optimizer, device, S, epoch, metrics, recorder)

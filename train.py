@@ -46,7 +46,7 @@ def main() -> None:
     # 加载配置
     data_dir, img_size, S, batch_size, num_workers, epochs, learning_rate, log_dir = read_train_config('./config.yaml')
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda')
     logger, run_dir, ckpt_dir, recorder = init_run_logger(log_dir, device, data_dir, img_size, S, batch_size, epochs)
 
     # 数据集与加载器

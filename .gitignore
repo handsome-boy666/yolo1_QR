@@ -1,4 +1,5 @@
-checkpoints
 .vscode
 __pycache__
-logs
+logs/
+predictions/
+.trae

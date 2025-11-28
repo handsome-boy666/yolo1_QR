@@ -4,19 +4,23 @@ train:
   S: 4
   batch_size: 16
   num_workers: 4
-  epochs: 50
+  epochs: 200
   learning_rate: 0.0001
   log_dir: ./logs
 
 predict:
-  # 若提供具体模型路径则使用它；否则当 use_latest: true 时自动使用 ckpt_dir 中最新模型
-  checkpoint_path: E:\my_workspace\yolo1_QR\checkpoints\epoch_050.pth
-  ckpt_dir: ./checkpoints
-  image_path: E:\my_workspace\yolo1_QR\data\images\val\00003284.jpg
-  output_path: E:\my_workspace\yolo1_QR\data\images\val\pred\00003284_pred.jpg
-  use_latest: true
-  device: auto  # auto/cuda/cpu
+  ckpt_path: 'E:/my_workspace/yolo1_QR/logs/20251124_184412/checkpoints/epoch_050.pth'
+  data_dir: ./dataset
   img_size: 512
   S: 4
-  conf_thresh: 0.35
-  nms_thresh: 0.5
+  conf_thresh: 0.4
+  iou_thresh: 0.2
+  save_dir: ./predictions
+  image_path: 'E:/my_workspace/yolo1_QR/dataset/images/test/00003545.jpg'
+  out_dir: ./predictions/single
+  run_test: false  # 是否运行测试集评估(测试所有测试集图片)
+
+  
+  webcam_index: 0
+  live_save_dir: ./predictions/live
+  record: false # 是否记录视频
