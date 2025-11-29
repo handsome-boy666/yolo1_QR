@@ -26,26 +26,30 @@ Loss = \lambda_{coord} \cdot Loss_{coord} + \lambda_{noobj} \cdot Loss_{noobj} +
 $$
 
 *  **四大损失项分别对应：**
-    - 边界框坐标损失 $Loss_{coord}$ 
-    - 无目标置信度损失 $Loss_{noobj}$
-    - 有目标置信度损失 $Loss_{conf}$
-    - 类别损失 $Loss_{class}$
-*  **权重：**
-    - 边界框坐标损失 $Loss_{coord}$ 权重一般为 $\lambda_{coord} = 5$
-    - 无目标置信度损失 $Loss_{noobj}$ 权重一般为 $\lambda_{noobj} = 0.5$
-
+    - 边界框坐标损失 $Loss_{coord}$ ，权重一般为 $\lambda_{coord} = 5$
+    - 无目标置信度损失 $Loss_{noobj}$ ，权重一般为 $\lambda_{noobj} = 0.5$
+    - 有目标置信度损失 $Loss_{conf}$ ，权重一般为 $1$
+    - 类别损失 $Loss_{class}$ ，权重一般为 $1$
+1. **边界框坐标损失：**
 $$
 Loss_{coord} = \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{I}_{ij}^{obj} \left[
 (x_{ij} - \hat{x}_{ij})^2 + (y_{ij} - \hat{y}_{ij})^2 +
 (\sqrt{w_{ij}} - \sqrt{\hat{w}_{ij}})^2 + (\sqrt{h_{ij}} - \sqrt{\hat{h}_{ij}})^2
 \right]
 $$
-
-
-
-
-
-
+2. **无目标置信度损失：**
+$$
+Loss_{noobj} = \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{I}_{ij}^{noobj} (C_{ij} - \hat{C}_{ij})^2
+$$
+3. **有目标置信度损失：**
+$$
+Loss_{conf} = \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{I}_{ij}^{obj} (C_{ij} - \hat{C}_{ij})^2
+$$
+4. **类别损失：**
+$$
+Loss_{class} = \sum_{i=0}^{S^2} \sum_{c \in classes} \mathbb{I}_{i}^{obj} (p_{i,c} - \hat{p}_{i,c})^2
+$$
+得到最终损失函数
 
 $$
 \begin{aligned}
