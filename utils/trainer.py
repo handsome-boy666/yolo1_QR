@@ -83,7 +83,7 @@ def train_one_epoch(model, dataloader, optimizer, device, S, epoch: Optional[int
     return total_loss / max(1, len(dataloader))
 
 
-def run_training(model, dataloader, optimizer, device, S, start_epoch, epochs, ckpt_dir, logger, recorder) -> None:
+def run_training(model, dataloader, optimizer, device, S, start_epoch, epochs, ckpt_dir, logger, recorder, save_interval: int = 1) -> None:
     for epoch in range(start_epoch, epochs + 1):
         metrics = DetectionMetrics(iou_thresh=0.5, conf_thresh=0.5)
         avg_loss = train_one_epoch(model, dataloader, optimizer, device, S, epoch, metrics, recorder)
@@ -91,4 +91,6 @@ def run_training(model, dataloader, optimizer, device, S, start_epoch, epochs, c
         logger.info(f'Epoch [{epoch}/{epochs}] - loss: {avg_loss:.4f}, precision@0.5: {precision:.3f}, recall@0.5: {recall:.3f}, mIoU: {miou:.3f}')
         if recorder is not None:
             recorder.record_epoch(epoch, avg_loss, precision, recall, miou, get_lr(optimizer))
-        save_checkpoint(ckpt_dir, epoch, model, optimizer, logger)
+        
+        if epoch % save_interval == 0 or epoch == epochs:
+            save_checkpoint(ckpt_dir, epoch, model, optimizer, logger)

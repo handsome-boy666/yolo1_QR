@@ -17,14 +17,13 @@ from utils.trainer import maybe_resume, run_training
 
 from models.yolov1QR import YOLOv1_QR
 from data.datasets import QRCodeDataset
-from models.loss import yolo_v1_loss
 
 
-def read_train_config(path: str) -> tuple[str, int, int, int, int, int, float, str]:
+def read_train_config(path: str) -> tuple[str, int, int, int, int, int, float, str, int]:
     """读取并解析训练配置。
 
     返回值依次为:
-    data_dir, img_size, S, batch_size, num_workers, epochs, learning_rate, ckpt_dir
+    data_dir, img_size, S, batch_size, num_workers, epochs, learning_rate, ckpt_dir, save_interval
     """
     with open(path, 'r', encoding='utf-8') as f:
         cfg = yaml.safe_load(f)
@@ -38,13 +37,16 @@ def read_train_config(path: str) -> tuple[str, int, int, int, int, int, float, s
     epochs = int(tcfg.get('epochs'))
     learning_rate = float(tcfg.get('learning_rate'))
     log_dir = str(tcfg.get('log_dir'))
-    return data_dir, img_size, S, batch_size, num_workers, epochs, learning_rate, log_dir
+    save_interval = int(tcfg.get('save_interval', 1))
+    return data_dir, img_size, S, batch_size, num_workers, epochs, learning_rate, log_dir, save_interval
 
 
+
+from utils.visualizer import plot_run
 
 def main() -> None:
     # 加载配置
-    data_dir, img_size, S, batch_size, num_workers, epochs, learning_rate, log_dir = read_train_config('./config.yaml')
+    data_dir, img_size, S, batch_size, num_workers, epochs, learning_rate, log_dir, save_interval = read_train_config('./config.yaml')
 
     device = torch.device('cuda')
     logger, run_dir, ckpt_dir, recorder = init_run_logger(log_dir, device, data_dir, img_size, S, batch_size, epochs)
@@ -67,7 +69,15 @@ def main() -> None:
     start_epoch = maybe_resume(log_dir, model, optimizer, device, logger)
 
     # 训练循环
-    run_training(model, dataloader, optimizer, device, S, start_epoch, epochs, ckpt_dir, logger, recorder)
+    run_training(model, dataloader, optimizer, device, S, start_epoch, epochs, ckpt_dir, logger, recorder, save_interval)
+
+    # 训练结束后自动可视化
+    logger.info(f"Training finished. Plotting metrics to {run_dir}...")
+    try:
+        plot_run(run_dir)
+        logger.info("Plots saved successfully.")
+    except Exception as e:
+        logger.error(f"Failed to plot metrics: {e}")
 
 
 if __name__ == '__main__':

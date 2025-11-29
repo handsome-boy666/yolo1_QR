@@ -4,21 +4,22 @@ train:
   S: 4
   batch_size: 16
   num_workers: 4
-  epochs: 200
+  epochs: 10
+  save_interval: 2 # 保存模型的间隔epoch
   learning_rate: 0.0001
   log_dir: ./logs
 
 predict:
-  ckpt_path: 'E:/my_workspace/yolo1_QR/logs/20251124_184412/checkpoints/epoch_050.pth'
+  ckpt_path: 'E:\my_workspace\yolo1_QR\logs\20251128_201559\checkpoints\epoch_195.pth'
   data_dir: ./dataset
   img_size: 512
   S: 4
-  conf_thresh: 0.4
+  conf_thresh: 0.8
   iou_thresh: 0.2
   save_dir: ./predictions
   image_path: 'E:/my_workspace/yolo1_QR/dataset/images/test/00003545.jpg'
   out_dir: ./predictions/single
-  run_test: false  # 是否运行测试集评估(测试所有测试集图片)
+  run_test: true  # 是否运行测试集评估(测试所有测试集图片)
 
   
   webcam_index: 0
