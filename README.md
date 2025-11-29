@@ -25,11 +25,11 @@ $$
 Loss = \lambda_{coord} \cdot Loss_{coord} + \lambda_{noobj} \cdot Loss_{noobj} + Loss_{conf} + Loss_{class}
 $$
 
-*  **四大损失项分别对应：**
-    - 边界框坐标损失 $Loss_{coord}$ ，权重一般为 $\lambda_{coord} = 5$
-    - 无目标置信度损失 $Loss_{noobj}$ ，权重一般为 $\lambda_{noobj} = 0.5$
-    - 有目标置信度损失 $Loss_{conf}$ ，权重一般为 $1$
-    - 类别损失 $Loss_{class}$ ，权重一般为 $1$
+**四大损失项分别对应：**
+    - 边界框坐标损失 $Loss_{coord}$ ，一般 $\lambda_{coord} = 5$
+    - 无目标置信度损失 $Loss_{noobj}$ ，一般 $\lambda_{noobj} = 0.5$
+    - 有目标置信度损失 $Loss_{conf}$ 
+    - 类别损失 $Loss_{class}$ 
 1. **边界框坐标损失：**
 
 $$
@@ -57,24 +57,15 @@ $$
 Loss_{class} = \sum_{i=0}^{S^2} \sum_{c \in classes} \mathbb{I}_{i}^{obj} (p_{i,c} - \hat{p}_{i,c})^2
 $$
 
-得到最终损失函数
-
-$$
-\begin{aligned}
-Loss &= \lambda_{coord} \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{1}_{ij}^{obj} [(x_i - \hat{x}_i)^2 + (y_i - \hat{y}_i)^2] \\
-&+ \lambda_{coord} \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{1}_{ij}^{obj} [(\sqrt{w_i} - \sqrt{\hat{w}_i})^2 + (\sqrt{h_i} - \sqrt{\hat{h}_i})^2] \\
-&+ \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{1}_{ij}^{obj} (C_i - \hat{C}_i)^2 \\
-&+ \lambda_{noobj} \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{1}_{ij}^{noobj} (C_i - \hat{C}_i)^2 \\
-&+ \sum_{i=0}^{S^2} \mathbb{1}_{i}^{obj} \sum_{c \in classes} (p_i(c) - \hat{p}_i(c))^2
-\end{aligned}
-$$
-
-其中：
-*   $\mathbb{1}_{ij}^{obj}$ 表示第 $i$ 个网格的第 $j$ 个 bbox 负责预测物体。
-*   $\lambda_{coord} = 5$, $\lambda_{noobj} = 0.5$。
-
-**本项目改进**:
-针对二维码检测任务（单类别），简化了部分结构，专注于检测二维码的位置。
+**符号说明：**
+*   $S$: 网格数量（例如 $7 \times 7 = 49$）。
+*   $B$: 每个网格预测的边界框数量。
+*   $\mathbb{I}_{ij}^{obj}$: 指示函数，当第 $i$ 个网格的第 $j$ 个边界框负责预测物体时为 1，否则为 0。
+*   $\mathbb{I}_{i}^{noobj}$: 指示函数，当第 $i$ 个网格的第 $j$ 个边界框**不**负责预测物体时为 1，否则为 0。
+*   $x_i, y_i, w_i, h_i$: 真实框的中心坐标和宽高（归一化后）。
+*   $\hat{x}_i, \hat{y}_i, \hat{w}_i, \hat{h}_i$: 预测框的中心坐标和宽高。
+*   $C_i, \hat{C}_i$: 真实置信度和预测置信度。
+*   $p_i(c), \hat{p}_i(c)$: 真实类别概率和预测类别概率。
 
 ## 2. 本项目简介
 
