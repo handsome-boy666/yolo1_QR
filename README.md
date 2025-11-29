@@ -37,18 +37,22 @@ Loss_{coord} = \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{I}_{ij}^{obj} \left[
 (\sqrt{w_{ij}} - \sqrt{\hat{w}_{ij}})^2 + (\sqrt{h_{ij}} - \sqrt{\hat{h}_{ij}})^2
 \right]
 $$
+
 2. **无目标置信度损失：**
 $$
 Loss_{noobj} = \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{I}_{ij}^{noobj} (C_{ij} - \hat{C}_{ij})^2
 $$
+
 3. **有目标置信度损失：**
 $$
 Loss_{conf} = \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{I}_{ij}^{obj} (C_{ij} - \hat{C}_{ij})^2
 $$
+
 4. **类别损失：**
 $$
 Loss_{class} = \sum_{i=0}^{S^2} \sum_{c \in classes} \mathbb{I}_{i}^{obj} (p_{i,c} - \hat{p}_{i,c})^2
 $$
+
 得到最终损失函数
 
 $$
