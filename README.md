@@ -10,12 +10,12 @@ YOLOv1 是一种单阶段目标检测算法，其核心思想是将目标检测�
 ![alt text](images/image1.png)
 
 *   **网格划分 (Grid Split)**: 将输入图像划分为 $7 \times 7$ 的网格。如果一个物体的中心落在某个网格内，该网格就负责检测该物体。
-*   **边界框回归 (Bounding Box Regression)**: 每个网格预测 $2$ 个边界框 (Bounding Box)。每个边界框包含 5 个预测值：$x, y, w, h$ (位置与大小) 和 $confidence$ (置信度)。
+*   **边界框回归 (Bounding Box Regression)**: 每个网格预测 $2$ 个边界框 (Bounding Box)。每个边界框包含 5 个预测值： $x, y, w, h$  (位置与大小) 和 $confidence$ (置信度)。
     *   $x, y$: 边界框中心相对于网格单元的偏移。
     *   $w, h$: 边界框相对于整张图像的宽高。
     *   $confidence$: 预测框包含物体的概率 $\times$ 预测框与真实框的 IoU。
 *   **类别概率 (Class Probability)**: 每个网格还需要预测 $20$ 个类别的条件概率。
-    * 分析：每个网格需要得到 $2$ 个边界框的预测值，每个边界框包含 $5$ 个值，加上 $20$ 个每一类的概率，总共是 $2 \times 5 + 20 = 30$ 个值。可以看到符合最终输出的$7 \times 7 \times 30$的格式。
+    * 分析：每个网格需要得到 $2$ 个边界框的预测值，每个边界框包含 $5$ 个值，加上 $20$ 个每一类的概率，总共是 $2 \times 5 + 20 = 30$ 个值。可以看到符合最终输出的 $7 \times 7 \times 30$ 的格式。
 <p align="center">
   <img src="images/image2.png" alt="image2" width="300"/>
 </p>
@@ -26,13 +26,13 @@ Loss = \lambda_{coord} \cdot Loss_{coord} + \lambda_{noobj} \cdot Loss_{noobj} +
 $$
 
 *  **四大损失项分别对应：**
-    - 边界框坐标损失$Loss_{coord}$
-    - 无目标置信度损失$Loss_{noobj}$
-    - 有目标置信度损失$Loss_{conf}$
-    - 类别损失$Loss_{class}$
+    - 边界框坐标损失 $Loss_{coord}$ 
+    - 无目标置信度损失 $Loss_{noobj}$
+    - 有目标置信度损失 $Loss_{conf}$
+    - 类别损失 $Loss_{class}$
 *  **权重：**
-    - 边界框坐标损失$Loss_{coord}$权重一般为$\lambda_{coord} = 5$
-    - 无目标置信度损失$Loss_{noobj}$权重一般为$\lambda_{noobj} = 0.5$
+    - 边界框坐标损失 $Loss_{coord}$ 权重一般为 $\lambda_{coord} = 5$
+    - 无目标置信度损失 $Loss_{noobj}$ 权重一般为 $\lambda_{noobj} = 0.5$
 
 $$
 Loss_{coord} = \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{I}_{ij}^{obj} \left[
