@@ -31,6 +31,7 @@ $$
     - 有目标置信度损失 $Loss_{conf}$ ，权重一般为 $1$
     - 类别损失 $Loss_{class}$ ，权重一般为 $1$
 1. **边界框坐标损失：**
+
 $$
 Loss_{coord} = \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{I}_{ij}^{obj} \left[
 (x_{ij} - \hat{x}_{ij})^2 + (y_{ij} - \hat{y}_{ij})^2 +
@@ -39,16 +40,19 @@ Loss_{coord} = \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{I}_{ij}^{obj} \left[
 $$
 
 2. **无目标置信度损失：**
+
 $$
 Loss_{noobj} = \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{I}_{ij}^{noobj} (C_{ij} - \hat{C}_{ij})^2
 $$
 
 3. **有目标置信度损失：**
+
 $$
 Loss_{conf} = \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{I}_{ij}^{obj} (C_{ij} - \hat{C}_{ij})^2
 $$
 
 4. **类别损失：**
+
 $$
 Loss_{class} = \sum_{i=0}^{S^2} \sum_{c \in classes} \mathbb{I}_{i}^{obj} (p_{i,c} - \hat{p}_{i,c})^2
 $$
