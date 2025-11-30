@@ -4,10 +4,10 @@ train:
   S: 4
   batch_size: 16
   num_workers: 4
-  epochs: 10
-  save_interval: 2 # 保存模型的间隔epoch
+  epochs: 200 # 训练轮数
+  save_interval: 5 # 保存模型的间隔epoch
   learning_rate: 0.0001
-  log_dir: ./logs
+  log_dir: ./logs # 日志目录
 
 predict:
   ckpt_path: 'E:\my_workspace\yolo1_QR\weights\epoch_195_weights.pth'

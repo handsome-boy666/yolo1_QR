@@ -8,11 +8,11 @@
   <img src="images/real-time_demo.gif" alt="实时检测演示" height="250"/>
 </p>
 <p align="center">
-  <em>左：测试集图片检测样例 &nbsp;&nbsp;&nbsp; 右：电脑实时检测演示</em>
+  <em>左：测试集图片检测样例 &nbsp;&nbsp;&nbsp; 右：电脑摄像头实时检测演示</em>
 </p>
 
 ## 1. YOLOv1 原理简介
-如果您想直接开始使用本项目，无需了解 YOLOv1 的原理，您可以直接跳转到 [2. 本项目介绍](#2-本项目介绍) 部分。
+如果您想直接开始使用本项目，无需了解 YOLOv1 的原理，您可以直接跳转到 [本项目使用教程](#3-本项目使用教程) 部分。
 
 YOLOv1 是一种单阶段目标检测算法，其核心思想是将目标检测问题转化为回归问题。
 ### 1.1 YOLOv1 网络结构
@@ -121,15 +121,19 @@ $$
 
 本项目使用 PyTorch 实现，针对二维码数据集进行训练。
 
-1. **数据集**:yolov5二维码检测数据集（3100+张）。 [百度网盘链接在此](https://pan.baidu.com/s/1lkTu3XnFazSehs8GgNzVfg?pwd=3qu6) 提取码: 3qu6
+<p align="center">
+  <img src="images/image3.png" alt="image3" width="500"/>
+</p>
 
-2. **模型**: 简化 YOLOv1 结构，专用于单类别（QR Code）检测。预测类别修改为单类别（C=1），网格数量由7x7改为4x4，因为使用的二维码数据集在图中的占比大致为40%，而7x7网格会导致目标检测能力弱。
+1. **数据集**:yolov5二维码检测数据集（3100+张）。 [百度网盘链接](https://pan.baidu.com/s/1lkTu3XnFazSehs8GgNzVfg?pwd=3qu6) 提取码: 3qu6
+
+2. **模型**: 修改了部分 YOLOv1 网络尺寸，专用于单类别（QR Code）检测。预测类别修改为单类别（C=1），网格数量由7x7改为4x4（S=4），因为使用的二维码数据集在图中的占比大致为40%，而7x7网格会导致目标检测能力弱。
 
 3. **功能**: 支持断点续训、测试集指标评估 (mIoU, Precision, Recall, ap@0.5)、可视化预测结果、摄像头实时检测与录制。
 
-### 本项目 (YOLOv1_QR) 损失函数公式
+### 2.1 本项目损失函数公式
 
-由于本项目仅检测二维码（单类别，C=0 或隐含为 1 但不计算分类损失），且每个网格仅预测 1 个边界框 ($B=1$)，公式简化如下：
+由于本项目仅检测二维码（C=0，不计算分类损失），公式简化如下：
 
 $$
 \begin{aligned}
@@ -140,16 +144,13 @@ Loss &= \lambda_{coord} \sum_{i=0}^{S^2} \mathbb{1}_{i}^{obj} [(x_i - \hat{x}_i)
 \end{aligned}
 $$
 
-**主要区别**:
+**与原yolo1的主要区别**:
 1.  **移除分类损失**: 删除了最后一项 $\sum (p_i(c) - \hat{p}_i(c))^2$，因为只有一类（QR Code）。
-2.  **单框预测**: 每个网格只预测一个框 ($B=1$)，简化了 $j$ 的求和。
-3.  **数值稳定性**: 代码中对 $w, h$ 开根号前进行了 `clamp(min=1e-6)` 处理，防止 NaN。
+2.  **数值稳定性**: 代码中对 $w, h$ 开根号前进行了 `clamp(min=1e-6)` 处理，防止梯度爆炸。
+## 3 本项目使用教程
+### 3.1 环境配置
 
-## 3. 环境配置
-
-建议使用 Anaconda 创建虚拟环境。
-
-**依赖库**:
+**主要依赖库**:
 *   Python >= 3.8
 *   PyTorch (建议 GPU 版本)
 *   torchvision
@@ -158,25 +159,10 @@ $$
 *   tqdm
 *   PyYAML
 
-**安装命令示例**:
-```bash
-conda create -n yolo_qr python=3.9
-conda activate yolo_qr
-# 安装 PyTorch (请根据官网选择适合你 CUDA 版本的命令)
-conda install pytorch torchvision pytorch-cuda=11.8 -c pytorch -c nvidia
-# 安装其他依赖
-pip install opencv-python pillow tqdm pyyaml
-```
+## 3.2 快速开始
 
-## 4. 快速开始
-
-### 4.1 配置文件 (config.yaml)
-
-项目的所有主要配置都在 `config.yaml` 中。运行程序前，请确保配置文件中的路径（如 `data_dir`, `ckpt_path` 等）正确。
-
-### 4.2 训练 (Training)
-
-训练脚本会自动读取配置，检查是否有中断的训练并询问是否恢复。每个 epoch 都会保存模型权重。
+### 3.2.1 训练 (Training)
+在 `config.yaml` 中的train部分配置训练参数，如数据集路径、批量大小、学习率等。然后在终端运行训练脚本：
 
 ```bash
 python train.py
