@@ -1,15 +1,18 @@
 # YOLOv1_QR Project
 
 本项目基于 YOLOv1 改进用于二维码检测，涵盖训练、评估、预测及实时摄像头检测功能。原版 YOLOv1 支持 20 类目标检测，但在某些特定场景中我们只需检测定位一种物体，因此本项目对yolo1网络进行了修改和简化，对于初学者是一个很令人惊喜的实践。
+
+本项目效果展示如下：
 <p align="center">
   <img src="images/test_demo.png" alt="测试样例" height="250"/>
   <img src="images/real-time_demo.gif" alt="实时检测演示" height="250"/>
 </p>
 <p align="center">
-  <em>左：测试集样例 &nbsp;&nbsp;&nbsp; 右：实时检测演示</em>
+  <em>左：测试集图片检测样例 &nbsp;&nbsp;&nbsp; 右：电脑实时检测演示</em>
 </p>
 
 ## 1. YOLOv1 原理简介
+如果您想直接开始使用本项目，无需了解 YOLOv1 的原理，您可以直接跳转到 [2. 本项目介绍](#2-本项目介绍) 部分。
 
 YOLOv1 是一种单阶段目标检测算法，其核心思想是将目标检测问题转化为回归问题。
 ### 1.1 YOLOv1 网络结构
@@ -33,7 +36,7 @@ Loss = \lambda_{coord} \cdot Loss_{coord} + \lambda_{noobj} \cdot Loss_{noobj} +
 $$
 
 **四大损失项分别对应：**
-1. **边界框坐标损失：** 优化有目标网格中与真实框 IOU 最大的预测框的位置和尺寸，根号是为了防止大尺寸的影响大于小尺寸。一般取 $\lambda_{coord} = 5$
+1. **边界框坐标损失：** 优化有目标网格中与真实框 IOU 最大的预测框的位置和尺寸，根号是为了防止大尺寸的偏差影响大于小尺寸。一般取 $\lambda_{coord} = 5$
 
 $$
 Loss_{coord} = \sum_{i=0}^{S^2} \sum_{j=0}^{B} \mathbb{I}_{ij}^{obj} \left[
@@ -118,7 +121,7 @@ $$
 
 本项目使用 PyTorch 实现，针对二维码数据集进行训练。
 
-1. **数据集**:yolov5二维码检测数据集（3100+张）。 [百度网盘链接](https://pan.baidu.com/s/1lkTu3XnFazSehs8GgNzVfg?pwd=3qu6) 提取码: 3qu6
+1. **数据集**:yolov5二维码检测数据集（3100+张）。 [百度网盘链接在此](https://pan.baidu.com/s/1lkTu3XnFazSehs8GgNzVfg?pwd=3qu6) 提取码: 3qu6
 
 2. **模型**: 简化 YOLOv1 结构，专用于单类别（QR Code）检测。预测类别修改为单类别（C=1），网格数量由7x7改为4x4，因为使用的二维码数据集在图中的占比大致为40%，而7x7网格会导致目标检测能力弱。
 
