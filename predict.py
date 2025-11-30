@@ -27,7 +27,10 @@ import torchvision.transforms as transforms
 from models.yolov1QR import YOLOv1_QR
 from data.datasets import QRCodeDataset
 from utils.utils import cell_to_bbox, DetectionMetrics
-from models.utils import nms
+from models.utils import nms, box_iou
+import matplotlib
+matplotlib.use("Agg")  # 设置非交互式后端，避免 Qt 报错
+import matplotlib.pyplot as plt
 
 def _sanitize_path(p: str | None) -> str:
     if not p:
@@ -94,7 +97,12 @@ def build_transform(img_size: int):
     ])
 
 def decode_boxes(pred: torch.Tensor, S: int, conf_thresh: float, iou_thresh: float):
-    """将网络输出解码为归一化坐标框并执行 NMS，返回 [(box, score)] 列表。"""
+    """将网络输出解码为归一化坐标框，返回 NMS 后和 NMS 前的 [(box, score)] 列表。
+    
+    Returns:
+        nms_boxes: list of ((x1, y1, x2, y2), score) after NMS
+        raw_boxes: list of ((x1, y1, x2, y2), score) before NMS
+    """
     B = pred.size(0)
     pred = pred.view(B, S, S, 5).detach().cpu()
     boxes = []
@@ -110,8 +118,11 @@ def decode_boxes(pred: torch.Tensor, S: int, conf_thresh: float, iou_thresh: flo
                                               float(pred[0, j, i, 3]), S)
                 boxes.append((x1, y1, x2, y2))
                 scores.append(conf)
+    
+    raw_boxes = [(boxes[i], scores[i]) for i in range(len(boxes))]
     keep = nms(boxes, scores, iou_thresh)
-    return [(boxes[k], scores[k]) for k in keep]
+    nms_boxes = [(boxes[k], scores[k]) for k in keep]
+    return nms_boxes, raw_boxes
 
 def draw_boxes(image_path: str, boxes: list[tuple[tuple[float, float, float, float], float]], out_path: str):
     """在原图上绘制预测框并保存到 `out_path`。坐标为归一化，需要乘以图像尺寸转为像素。"""
@@ -149,6 +160,84 @@ def save_txt(out_path: str, boxes: list[tuple[tuple[float, float, float, float],
         for (x1, y1, x2, y2), score in boxes:
             f.write(f"{score:.6f} {x1:.6f} {y1:.6f} {x2:.6f} {y2:.6f}\n")
 
+def compute_ap(det_boxes: list, gt_boxes: dict, iou_threshold: float = 0.5) -> tuple[float, list, list]:
+    """计算 AP 以及 Precision-Recall 曲线数据。
+    
+    Args:
+        det_boxes: list of (img_idx, conf, x1, y1, x2, y2)
+        gt_boxes: dict {img_idx: [(x1, y1, x2, y2), ...]}
+        iou_threshold: IoU 阈值
+    
+    Returns:
+        ap: Average Precision
+        precisions: list of precision values
+        recalls: list of recall values
+    """
+    # 按置信度降序排列
+    det_boxes.sort(key=lambda x: x[1], reverse=True)
+    
+    tp = torch.zeros(len(det_boxes))
+    fp = torch.zeros(len(det_boxes))
+    
+    total_gt = sum(len(gts) for gts in gt_boxes.values())
+    if total_gt == 0:
+        return 0.0, [], []
+        
+    # 记录每个 GT 是否被匹配过
+    gt_matched = {k: torch.zeros(len(v)) for k, v in gt_boxes.items()}
+    
+    for idx, (img_idx, conf, x1, y1, x2, y2) in enumerate(det_boxes):
+        gts = gt_boxes.get(img_idx, [])
+        pred_box = (x1, y1, x2, y2)
+        
+        best_iou = 0.0
+        best_gt_idx = -1
+        
+        for i, gt in enumerate(gts):
+            iou = box_iou(pred_box, gt)
+            if iou > best_iou:
+                best_iou = iou
+                best_gt_idx = i
+        
+        if best_iou > iou_threshold:
+            if gt_matched[img_idx][best_gt_idx] == 0:
+                tp[idx] = 1
+                gt_matched[img_idx][best_gt_idx] = 1
+            else:
+                fp[idx] = 1
+        else:
+            fp[idx] = 1
+            
+    tp_cumsum = torch.cumsum(tp, dim=0)
+    fp_cumsum = torch.cumsum(fp, dim=0)
+    
+    recalls = tp_cumsum / (total_gt + 1e-6)
+    precisions = tp_cumsum / (tp_cumsum + fp_cumsum + 1e-6)
+    
+    # 添加起始点 (Recall=0, Precision=1)
+    precisions = torch.cat((torch.tensor([1.0]), precisions))
+    recalls = torch.cat((torch.tensor([0.0]), recalls))
+    
+    # 计算 AP (Area Under Curve)
+    # 使用梯形法则，或者简单的 P*dR
+    # 这里使用简单的 trapz
+    ap = torch.trapz(precisions, recalls).item()
+    
+    return ap, precisions.tolist(), recalls.tolist()
+
+def plot_pr_curve(precisions: list, recalls: list, ap: float, save_path: str):
+    plt.figure(figsize=(8, 6))
+    plt.plot(recalls, precisions, label=f"AP = {ap:.4f}")
+    plt.xlabel("Recall")
+    plt.ylabel("Precision")
+    plt.title(f"Precision-Recall Curve (AP={ap:.4f})")
+    plt.legend(loc="lower left")
+    plt.grid(True)
+    plt.xlim([0.0, 1.01])
+    plt.ylim([0.0, 1.01])
+    plt.savefig(save_path)
+    plt.close()
+
 def run_single(cfg: dict, image_path: str | None, out_dir: str | None, device: torch.device):
     """单图预测：加载图片、推理、解码与 NMS，并保存可视化与结果文件。"""
     image_path = image_path or cfg["image_path"]
@@ -167,12 +256,14 @@ def run_single(cfg: dict, image_path: str | None, out_dir: str | None, device: t
     img_t = tfm(img).unsqueeze(0).to(device)
     with torch.no_grad():
         pred = model(img_t)
-    boxes = decode_boxes(pred, cfg["S"], cfg["conf_thresh"], cfg["iou_thresh"])
+    boxes, raw_boxes = decode_boxes(pred, cfg["S"], cfg["conf_thresh"], cfg["iou_thresh"])
     base = os.path.splitext(os.path.basename(image_path))[0]
     vis_path = os.path.join(out_dir, f"{base}_pred.jpg")
     txt_path = os.path.join(out_dir, f"{base}.txt")
+    raw_txt_path = os.path.join(out_dir, f"{base}_raw.txt")
     draw_boxes(image_path, boxes, vis_path)
     save_txt(txt_path, boxes)
+    save_txt(raw_txt_path, raw_boxes)
 
 def run_test(cfg: dict, device: torch.device):
     """测试集评估：遍历 `images/test`，累积 DetectionMetrics 并保存逐图预测与总体指标。"""
@@ -186,26 +277,55 @@ def run_test(cfg: dict, device: torch.device):
     metrics = DetectionMetrics(iou_thresh=cfg["iou_thresh"], conf_thresh=cfg["conf_thresh"])
     save_base = os.path.join(cfg["save_dir"], "test")
     preds_dir = os.path.join(save_base, "preds")
+    preds_raw_dir = os.path.join(save_base, "preds_raw")
     vis_dir = os.path.join(save_base, "vis")
     os.makedirs(preds_dir, exist_ok=True)
+    os.makedirs(preds_raw_dir, exist_ok=True)
     os.makedirs(vis_dir, exist_ok=True)
     count = 0
+
+    all_det_boxes = []
+    all_gt_boxes = {}
+
     with torch.no_grad():
         for (imgs, targets) in loader:
             imgs = imgs.to(device)
             targets = targets.to(device)
             pred = model(imgs)
             metrics.update(pred, targets, cfg["S"]) 
-            boxes = decode_boxes(pred, cfg["S"], cfg["conf_thresh"], cfg["iou_thresh"]) 
+            boxes, raw_boxes = decode_boxes(pred, cfg["S"], cfg["conf_thresh"], cfg["iou_thresh"]) 
+            
+            # Collect predictions for AP calculation (Using RAW boxes as requested)
+            for box, score in raw_boxes:
+                all_det_boxes.append((count, score, *box))
+            
+            # Collect ground truths for AP calculation
+            gts = []
+            S = cfg["S"]
+            t = targets[0].cpu() # (S, S, 5)
+            for j in range(S):
+                for i in range(S):
+                    if t[j, i, 4] == 1:
+                        x_off, y_off, w, h = t[j, i, 0:4].tolist()
+                        gts.append(cell_to_bbox(i, j, x_off, y_off, w, h, S))
+            all_gt_boxes[count] = gts
+
             img_path, _ = ds.samples[count]
             base = os.path.splitext(os.path.basename(img_path))[0]
             save_txt(os.path.join(preds_dir, f"{base}.txt"), boxes)
+            save_txt(os.path.join(preds_raw_dir, f"{base}.txt"), raw_boxes)
             draw_boxes(img_path, boxes, os.path.join(vis_dir, f"{base}_pred.jpg"))
             count += 1
+
     precision, recall, miou = metrics.compute()
+    ap, precisions, recalls = compute_ap(all_det_boxes, all_gt_boxes, cfg["iou_thresh"])
+    print(f"Test Results: Precision={precision:.4f}, Recall={recall:.4f}, mIoU={miou:.4f}, AP={ap:.4f}")
+    
+    plot_pr_curve(precisions, recalls, ap, os.path.join(save_base, "pr_curve.png"))
+
     metrics_path = os.path.join(save_base, "metrics.json")
     with open(metrics_path, "w", encoding="utf-8") as f:
-        json.dump({"precision": precision, "recall": recall, "mIoU": miou, "count": count}, f, ensure_ascii=False, indent=2)
+        json.dump({"precision": precision, "recall": recall, "mIoU": miou, "AP": ap, "count": count}, f, ensure_ascii=False, indent=2)
 
 def main():
     parser = argparse.ArgumentParser(

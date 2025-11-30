@@ -10,12 +10,12 @@ train:
   log_dir: ./logs
 
 predict:
-  ckpt_path: 'E:\my_workspace\yolo1_QR\logs\20251128_201559\checkpoints\epoch_195.pth'
+  ckpt_path: 'E:\my_workspace\yolo1_QR\weights\epoch_195_weights.pth'
   data_dir: ./dataset
   img_size: 512
   S: 4
-  conf_thresh: 0.8
-  iou_thresh: 0.2
+  conf_thresh: 0
+  iou_thresh: 0.5
   save_dir: ./predictions
   image_path: 'E:/my_workspace/yolo1_QR/dataset/images/test/00003545.jpg'
   out_dir: ./predictions/single
