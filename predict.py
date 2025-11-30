@@ -139,8 +139,8 @@ def draw_boxes(image_path: str, boxes: list[tuple[tuple[float, float, float, flo
         y1p = int(y1 * h)
         x2p = int(x2 * w)
         y2p = int(y2 * h)
-        draw.rectangle([x1p, y1p, x2p, y2p], outline=(255, 0, 0), width=2)
-        label = f"{score:.2f}"
+        draw.rectangle([x1p, y1p, x2p, y2p], outline=(255, 0, 0), width=3)
+        label = f"QR:{score:.2f}"
         ty = y1p - 12 if (y1p - 12) > 0 else (y1p + 2)
         tx = x1p + 2
         try:
