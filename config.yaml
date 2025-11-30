@@ -19,7 +19,7 @@ predict:
   save_dir: ./predictions
   image_path: './test.png' # 单张图片路径
   out_dir: ./predictions/single
-  run_test: false  # 是否运行测试集评估(测试所有测试集图片)
+  run_test: true  # 是否运行测试集评估(测试所有测试集图片)
   test_batch_size: 16 # 测试集批量大小
   
   # 实时检测参数设置
