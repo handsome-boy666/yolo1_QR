@@ -14,12 +14,12 @@ predict:
   data_dir: ./dataset
   img_size: 512
   S: 4
-  conf_thresh: 0
+  conf_thresh: 0.4
   iou_thresh: 0.5
   save_dir: ./predictions
-  image_path: 'E:/my_workspace/yolo1_QR/dataset/images/test/00003545.jpg'
+  image_path: '"C:\Users\jjc37\Desktop\Snipaste_2025-11-30_11-33-07.jpg"'
   out_dir: ./predictions/single
-  run_test: true  # 是否运行测试集评估(测试所有测试集图片)
+  run_test: false  # 是否运行测试集评估(测试所有测试集图片)
 
   
   webcam_index: 0

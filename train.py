@@ -48,7 +48,7 @@ def main() -> None:
     # 加载配置
     data_dir, img_size, S, batch_size, num_workers, epochs, learning_rate, log_dir, save_interval = read_train_config('./config.yaml')
 
-    device = torch.device('cuda')
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logger, run_dir, ckpt_dir, recorder = init_run_logger(log_dir, device, data_dir, img_size, S, batch_size, epochs)
 
     # 数据集与加载器
@@ -58,7 +58,7 @@ def main() -> None:
         batch_size=batch_size,
         shuffle=True,
         num_workers=num_workers,
-        pin_memory=(device.type == 'cuda'),
+        pin_memory=(device.type == 'cuda'), # 仅当使用 CUDA 时启用，可提升数据加载速度
     )
 
     # 模型与优化器

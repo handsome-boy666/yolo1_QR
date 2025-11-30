@@ -30,6 +30,8 @@ def read_predict_config(path: str) -> dict:
         "live_save_dir": _sanitize_path(pcfg.get("live_save_dir", "./predictions/live")),
         "webcam_index": int(pcfg.get("webcam_index", 0)),
         "record": bool(pcfg.get("record", False)),
+        "capture_fps": float(pcfg.get("capture_fps", 30.0)),
+        "record_fps": float(pcfg.get("record_fps", 30.0)),
     }
 
 def find_latest_checkpoint(search_dir: str) -> str | None:
@@ -92,6 +94,8 @@ def main():
     parser.add_argument("--config", type=str, default="./config.yaml")
     parser.add_argument("--index", type=int, default=None)  # 摄像头索引，默认 0
     parser.add_argument("--record", action="store_true")
+    parser.add_argument("--fps", type=float, default=None)
+    parser.add_argument("--record-fps", type=float, default=None)
     args = parser.parse_args()
 
     cfg = read_predict_config(args.config)
@@ -99,6 +103,10 @@ def main():
         cfg["webcam_index"] = int(args.index)
     if args.record:
         cfg["record"] = True
+    if args.fps is not None:
+        cfg["capture_fps"] = float(args.fps)
+    if args.__dict__.get("record_fps") is not None:
+        cfg["record_fps"] = float(args.__dict__.get("record_fps"))
 
     try:
         import cv2
@@ -119,6 +127,10 @@ def main():
     if not cap.isOpened():
         print(f"无法打开摄像头: index={cfg['webcam_index']}")
         return
+    try:
+        cap.set(cv2.CAP_PROP_FPS, cfg["capture_fps"])
+    except Exception:
+        pass
 
     os.makedirs(cfg["live_save_dir"], exist_ok=True)
     writer = None
@@ -129,7 +141,7 @@ def main():
         if writer is None:
             fourcc = cv2.VideoWriter_fourcc(*"mp4v")
             out_path = os.path.join(cfg["live_save_dir"], time.strftime("%Y%m%d_%H%M%S") + ".mp4")
-            writer = cv2.VideoWriter(out_path, fourcc, 20.0, h_w)
+            writer = cv2.VideoWriter(out_path, fourcc, cfg["record_fps"], h_w)
             print(f"开始录制: {out_path}")
 
     def stop_record():
