@@ -60,6 +60,7 @@ def read_predict_config(path: str) -> dict:
         "out_dir": _sanitize_path(pcfg.get("out_dir", "./predictions/single")),
         "run_test": bool(pcfg.get("run_test", False)),
         "train_log_dir": _sanitize_path((cfg.get("train", {}) or {}).get("log_dir", "./logs")),
+        "test_batch_size": int(pcfg.get("test_batch_size", 64)),
     }
 
 def find_latest_checkpoint(search_dir: str) -> str | None:
@@ -96,7 +97,7 @@ def build_transform(img_size: int):
         transforms.ToTensor(),
     ])
 
-def decode_boxes(pred: torch.Tensor, S: int, conf_thresh: float, iou_thresh: float):
+def decode_boxes(pred: torch.Tensor, S: int, conf_thresh: float, iou_thresh: float, sample_idx: int = 0):
     """将网络输出解码为归一化坐标框，返回 NMS 后和 NMS 前的 [(box, score)] 列表。
     
     Returns:
@@ -109,13 +110,13 @@ def decode_boxes(pred: torch.Tensor, S: int, conf_thresh: float, iou_thresh: flo
     scores = []
     for j in range(S):
         for i in range(S):
-            conf = float(pred[0, j, i, 4])
+            conf = float(pred[int(sample_idx), j, i, 4])
             if conf >= conf_thresh:
                 x1, y1, x2, y2 = cell_to_bbox(i, j,
-                                              float(pred[0, j, i, 0]),
-                                              float(pred[0, j, i, 1]),
-                                              float(pred[0, j, i, 2]),
-                                              float(pred[0, j, i, 3]), S)
+                                              float(pred[int(sample_idx), j, i, 0]),
+                                              float(pred[int(sample_idx), j, i, 1]),
+                                              float(pred[int(sample_idx), j, i, 2]),
+                                              float(pred[int(sample_idx), j, i, 3]), S)
                 boxes.append((x1, y1, x2, y2))
                 scores.append(conf)
     
@@ -272,9 +273,8 @@ def run_test(cfg: dict, device: torch.device):
         raise SystemExit("未找到权重文件，请在 predict.ckpt_path 指定或训练后再试")
     model = load_model(ckpt_path, device)
     model.eval()
-    ds = QRCodeDataset(data_dir=cfg["data_dir"], img_size=cfg["img_size"], S=cfg["S"], if_train=False)
-    loader = DataLoader(ds, batch_size=1, shuffle=False, num_workers=0, pin_memory=(device.type == "cuda"))
-    metrics = DetectionMetrics(iou_thresh=cfg["iou_thresh"], conf_thresh=cfg["conf_thresh"])
+    image_dir = os.path.join(cfg["data_dir"], "images", "test")
+    label_dir = os.path.join(cfg["data_dir"], "labels", "test")
     save_base = os.path.join(cfg["save_dir"], "test")
     preds_dir = os.path.join(save_base, "preds")
     preds_raw_dir = os.path.join(save_base, "preds_raw")
@@ -282,40 +282,68 @@ def run_test(cfg: dict, device: torch.device):
     os.makedirs(preds_dir, exist_ok=True)
     os.makedirs(preds_raw_dir, exist_ok=True)
     os.makedirs(vis_dir, exist_ok=True)
+
+    if not os.path.isdir(label_dir):
+        tfm = build_transform(cfg["img_size"])
+        img_exts = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+        files = []
+        if os.path.isdir(image_dir):
+            files = [f for f in os.listdir(image_dir) if os.path.splitext(f)[1].lower() in img_exts]
+        count = 0
+        with torch.no_grad():
+            for img_file in sorted(files):
+                img_path = os.path.join(image_dir, img_file)
+                img = Image.open(img_path).convert("RGB")
+                img_t = tfm(img).unsqueeze(0).to(device)
+                pred = model(img_t)
+                boxes, raw_boxes = decode_boxes(pred, cfg["S"], cfg["conf_thresh"], cfg["iou_thresh"]) 
+                base = os.path.splitext(os.path.basename(img_file))[0]
+                save_txt(os.path.join(preds_dir, f"{base}.txt"), boxes)
+                save_txt(os.path.join(preds_raw_dir, f"{base}.txt"), raw_boxes)
+                draw_boxes(img_path, boxes, os.path.join(vis_dir, f"{base}_pred.jpg"))
+                count += 1
+        print(f"labels 路径不存在，仅预测完成: {count} 张")
+        return
+
+    ds = QRCodeDataset(data_dir=cfg["data_dir"], img_size=cfg["img_size"], S=cfg["S"], if_train=False)
+    loader = DataLoader(ds, batch_size=cfg.get("test_batch_size", 64), shuffle=False, num_workers=0, pin_memory=(device.type == "cuda"))
+    metrics = DetectionMetrics(iou_thresh=cfg["iou_thresh"], conf_thresh=cfg["conf_thresh"])
     count = 0
 
     all_det_boxes = []
     all_gt_boxes = {}
 
     with torch.no_grad():
+        global_index = 0
         for (imgs, targets) in loader:
             imgs = imgs.to(device)
             targets = targets.to(device)
             pred = model(imgs)
             metrics.update(pred, targets, cfg["S"]) 
-            boxes, raw_boxes = decode_boxes(pred, cfg["S"], cfg["conf_thresh"], cfg["iou_thresh"]) 
-            
-            # Collect predictions for AP calculation (Using RAW boxes as requested)
-            for box, score in raw_boxes:
-                all_det_boxes.append((count, score, *box))
-            
-            # Collect ground truths for AP calculation
-            gts = []
-            S = cfg["S"]
-            t = targets[0].cpu() # (S, S, 5)
-            for j in range(S):
-                for i in range(S):
-                    if t[j, i, 4] == 1:
-                        x_off, y_off, w, h = t[j, i, 0:4].tolist()
-                        gts.append(cell_to_bbox(i, j, x_off, y_off, w, h, S))
-            all_gt_boxes[count] = gts
+            B = pred.size(0)
+            for b in range(B):
+                boxes, raw_boxes = decode_boxes(pred, cfg["S"], cfg["conf_thresh"], cfg["iou_thresh"], sample_idx=b)
+                # Collect predictions for AP calculation (Using RAW boxes)
+                for box, score in raw_boxes:
+                    all_det_boxes.append((global_index, score, *box))
+                # Collect ground truths
+                gts = []
+                Sg = cfg["S"]
+                t = targets[b].cpu() # (S, S, 5)
+                for j in range(Sg):
+                    for i in range(Sg):
+                        if t[j, i, 4] == 1:
+                            x_off, y_off, w, h = t[j, i, 0:4].tolist()
+                            gts.append(cell_to_bbox(i, j, x_off, y_off, w, h, Sg))
+                all_gt_boxes[global_index] = gts
 
-            img_path, _ = ds.samples[count]
-            base = os.path.splitext(os.path.basename(img_path))[0]
-            save_txt(os.path.join(preds_dir, f"{base}.txt"), boxes)
-            save_txt(os.path.join(preds_raw_dir, f"{base}.txt"), raw_boxes)
-            draw_boxes(img_path, boxes, os.path.join(vis_dir, f"{base}_pred.jpg"))
-            count += 1
+                img_path, _ = ds.samples[global_index]
+                base = os.path.splitext(os.path.basename(img_path))[0]
+                save_txt(os.path.join(preds_dir, f"{base}.txt"), boxes)
+                save_txt(os.path.join(preds_raw_dir, f"{base}.txt"), raw_boxes)
+                draw_boxes(img_path, boxes, os.path.join(vis_dir, f"{base}_pred.jpg"))
+                global_index += 1
+            count = global_index
 
     precision, recall, miou = metrics.compute()
     ap, precisions, recalls = compute_ap(all_det_boxes, all_gt_boxes, cfg["iou_thresh"])
@@ -340,9 +368,12 @@ def main():
     parser.add_argument("--image", type=str, default=None, help="单图预测的图片路径，若省略则使用配置中的 image_path")
     parser.add_argument("--out", type=str, default=None, help="单图预测输出目录，若省略则使用配置中的 out_dir")
     parser.add_argument("--test", action="store_true", help="运行测试集评估（忽略 --image/--out）")
+    parser.add_argument("--test-batch-size", type=int, default=None, help="测试评估的批量大小，默认读取配置或 64")
     args = parser.parse_args()
     cfg = read_predict_config(args.config)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if args.__dict__.get("test_batch_size") is not None:
+        cfg["test_batch_size"] = int(args.__dict__.get("test_batch_size"))
     if args.test or cfg["run_test"]:
         run_test(cfg, device)
         return

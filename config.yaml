@@ -2,7 +2,7 @@ train:
   data_dir: ./dataset
   img_size: 512
   S: 4
-  batch_size: 16
+  batch_size: 64
   num_workers: 4
   epochs: 200 # 训练轮数
   save_interval: 5 # 保存模型的间隔epoch
@@ -10,18 +10,21 @@ train:
   log_dir: ./logs # 日志目录
 
 predict:
-  ckpt_path: 'E:\my_workspace\yolo1_QR\weights\epoch_195_weights.pth'
+  ckpt_path: './weights/epoch_195_weights.pth' # 模型权重路径
   data_dir: ./dataset
   img_size: 512
   S: 4
   conf_thresh: 0.4
   iou_thresh: 0.5
   save_dir: ./predictions
-  image_path: '"C:\Users\jjc37\Desktop\Snipaste_2025-11-30_11-33-07.jpg"'
+  image_path: './test.png' # 单张图片路径
   out_dir: ./predictions/single
-  run_test: true  # 是否运行测试集评估(测试所有测试集图片)
-
+  run_test: false  # 是否运行测试集评估(测试所有测试集图片)
+  test_batch_size: 16 # 测试集批量大小
   
-  webcam_index: 0
-  live_save_dir: ./predictions/live
+  webcam_index: 0 # 摄像头索引
+  live_save_dir: ./predictions/live # 实时检测保存目录
   record: false # 是否记录视频
+  capture_fps: 30 # 摄像头帧率
+  record_fps: 30 # 记录视频帧率
+
