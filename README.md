@@ -2,7 +2,7 @@
 
 本项目基于 YOLOv1 改进用于二维码检测，涵盖训练、评估、预测及实时摄像头检测功能。原版 YOLOv1 支持 20 类目标检测，但在某些特定场景中我们只需检测定位一种物体，因此本项目对yolo1网络进行了修改和简化，对于初学者是一个很令人惊喜的实践。
 <p align="center">
-  <img src="images/demo.png" alt="image2" width="300"/>
+  <img src="images/demo.png" alt="image2" width="400"/>
 </p>
 
 ## 1. YOLOv1 原理简介
