@@ -14,14 +14,15 @@ predict:
   data_dir: ./dataset
   img_size: 512
   S: 4
-  conf_thresh: 0.4
-  iou_thresh: 0.5
+  conf_thresh: 0.4  # 置信度阈值，低于该值的检测框将被忽略
+  iou_thresh: 0.5  # IoU 阈值，用于NMS非极大值抑制，低于该值的检测框将被删除
   save_dir: ./predictions
   image_path: './test.png' # 单张图片路径
   out_dir: ./predictions/single
   run_test: false  # 是否运行测试集评估(测试所有测试集图片)
   test_batch_size: 16 # 测试集批量大小
   
+  # 实时检测参数设置
   webcam_index: 0 # 摄像头索引
   live_save_dir: ./predictions/live # 实时检测保存目录
   record: false # 是否记录视频

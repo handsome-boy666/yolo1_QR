@@ -158,6 +158,30 @@ $$
 *   PyYAML
 
 ### 3.1 训练 (Training)
+将数据集保存在 `./dataset/` 目录下，结构如下：
+
+```
+./dataset/
+├── images/
+│   ├── train/
+│   │   ├── 000001.jpg
+│   │   ├── 000002.jpg
+│   │   └── ...
+│   └── test/
+│       ├── 000301.jpg
+│       ├── 000302.jpg
+│       └── ...
+└── labels/
+    ├── train/
+    │   ├── 000001.txt
+    │   ├── 000002.txt
+    │   └── ...
+    └── test/
+        ├── 000301.txt
+        ├── 000302.txt
+        └── ...
+```
+
 在 `config.yaml` 中的train部分配置训练参数，如数据集路径、批量大小、学习率等。然后在终端运行训练脚本：
 
 ```bash
@@ -172,29 +196,31 @@ python train.py
 `predict.py` 支持两种模式：单张图片预测和测试集评估（批量检测）。
 
 **1. 单张图片预测**
-预测单张图片，将检测框画在图上并显示置信度，保存到指定目录。
+在 `config.yaml` 中将 `run_test` 设为 `false`，可在predict部分配置单张图片路径、输出目录等
 
 ```bash
 # 使用命令行参数
-python predict.py --config ./config.yaml --image ./dataset/images/test/sample.jpg --out ./predictions/single
+python predict.py --config ./config.yaml --image ./test.png --out ./predictions/single
 
 # 或者仅使用 config.yaml 中的配置
-python predict.py --config ./config.yaml
+python predict.py
 ```
+运行后，将在 `./predictions/single/` 目录下保存预测结果图（包含检测框和置信度）。
 
-**2. 测试集评估**
-评估整个测试集，计算 Precision, Recall, mIoU 等指标。
+**2. 测试集评估（批量检测）**
+在 `config.yaml` 中将 `run_test` 设为 `true`，可在predict部分配置测试集路径、批量大小等。
 
 ```bash
 python predict.py --config ./config.yaml --test
 ```
+运行后评估整个测试集，计算 Precision, Recall, mIoU 等指标，生成可视化结果。
 
-### 4.4 实时检测 (Webcam)
+### 3.3 实时检测 (Webcam)
 
-使用电脑摄像头进行实时二维码检测。
+使用电脑摄像头进行实时二维码检测，参数可在 `config.yaml` 中配置。
 
 ```bash
-python webcam_detect.py --config ./config.yaml
+python webcam_detect.py
 ```
 
 **参数说明**:
@@ -205,7 +231,7 @@ python webcam_detect.py --config ./config.yaml
 *   **`q`**: 退出程序。
 *   **`r`**: 开始/停止 录制视频。录制的视频将保存在 `config.yaml` 中 `live_save_dir` 指定的目录。
 
-## 5. 目录结构说明
+## 4. 目录结构说明
 
 ```
 yolo1_QR/
