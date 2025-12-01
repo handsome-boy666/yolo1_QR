@@ -32,60 +32,30 @@ import matplotlib
 matplotlib.use("Agg")  # 设置非交互式后端，避免 Qt 报错
 import matplotlib.pyplot as plt
 
-def _sanitize_path(p: str | None) -> str:
-    if not p:
-        return ""
-    s = str(p).strip()
-    if (s.startswith('r"') and s.endswith('"')) or (s.startswith("r'") and s.endswith("'")):
-        s = s[2:-1]
-    if (s.startswith('"') and s.endswith('"')) or (s.startswith("'") and s.endswith("'")):
-        s = s[1:-1]
-    s = s.replace("\\", "/")
-    return os.path.normpath(s)
-
 def read_predict_config(path: str) -> dict:
     """读取并解析 predict 段配置，返回统一字典；CLI 参数可覆盖此处配置。"""
     with open(path, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f) or {}
     pcfg = cfg.get("predict", {})
     return {
-        "ckpt_path": _sanitize_path(pcfg.get("ckpt_path") or ""),
-        "data_dir": _sanitize_path(pcfg.get("data_dir", "./dataset")),
+        "ckpt_path": pcfg.get("ckpt_path") or "",
+        "data_dir": pcfg.get("data_dir", "./dataset"),
         "img_size": int(pcfg.get("img_size", 512)),
         "S": int(pcfg.get("S", 4)),
         "conf_thresh": float(pcfg.get("conf_thresh", 0.5)),
         "iou_thresh": float(pcfg.get("iou_thresh", 0.5)),
-        "save_dir": _sanitize_path(pcfg.get("save_dir", "./predictions")),
-        "image_path": _sanitize_path(pcfg.get("image_path") or ""),
-        "out_dir": _sanitize_path(pcfg.get("out_dir", "./predictions/single")),
+        "save_dir": pcfg.get("save_dir", "./predictions"),
+        "image_path": pcfg.get("image_path") or "",
+        "out_dir": pcfg.get("out_dir", "./predictions/single"),
         "run_test": bool(pcfg.get("run_test", False)),
-        "train_log_dir": _sanitize_path((cfg.get("train", {}) or {}).get("log_dir", "./logs")),
+        "train_log_dir": pcfg.get("train_log_dir", "./logs"),
         "test_batch_size": int(pcfg.get("test_batch_size", 64)),
     }
-
-def find_latest_checkpoint(search_dir: str) -> str | None:
-    """在给定目录树中搜索最近修改的 .pth 权重，返回路径或 None。"""
-    latest = None
-    latest_mtime = -1.0
-    if not os.path.isdir(search_dir):
-        return None
-    for root, _, files in os.walk(search_dir):
-        for f in files:
-            if f.endswith(".pth"):
-                path = os.path.join(root, f)
-                try:
-                    mtime = os.path.getmtime(path)
-                except Exception:
-                    mtime = 0.0
-                if mtime > latest_mtime:
-                    latest_mtime = mtime
-                    latest = path
-    return latest
 
 def load_model(ckpt_path: str | None, device: torch.device) -> YOLOv1_QR:
     """构建模型并按需加载权重；若未提供有效权重则返回随机初始化模型。"""
     model = YOLOv1_QR().to(device)
-    if ckpt_path and os.path.isfile(ckpt_path):
+    if ckpt_path and os.path.isfile(ckpt_path): # 检查权重文件是否存在
         state = torch.load(ckpt_path, map_location=device)
         model.load_state_dict(state.get("model_state", state))
     return model
@@ -221,12 +191,12 @@ def compute_ap(det_boxes: list, gt_boxes: dict, iou_threshold: float = 0.5) -> t
     
     # 计算 AP (Area Under Curve)
     # 使用梯形法则，或者简单的 P*dR
-    # 这里使用简单的 trapz
+    # 这里使用简单的 trapz, 计算积分面积
     ap = torch.trapz(precisions, recalls).item()
     
     return ap, precisions.tolist(), recalls.tolist()
 
-def plot_pr_curve(precisions: list, recalls: list, ap: float, save_path: str):
+def plot_pr_curve(precisions: list, recalls: list, ap: float, save_path: str):  # 绘制 Precision-Recall 曲线
     plt.figure(figsize=(8, 6))
     plt.plot(recalls, precisions, label=f"AP = {ap:.4f}")
     plt.xlabel("Recall")
@@ -247,7 +217,7 @@ def run_single(cfg: dict, image_path: str | None, out_dir: str | None, device: t
         raise SystemExit("image_path 未提供")
     if not os.path.isfile(image_path):
         raise SystemExit(f"图片不存在: {image_path}")
-    ckpt_path = cfg["ckpt_path"] or find_latest_checkpoint(cfg["train_log_dir"]) or ""
+    ckpt_path = cfg["ckpt_path"] or ""
     if not ckpt_path:
         raise SystemExit("未找到权重文件，请在 predict.ckpt_path 指定或训练后再试")
     model = load_model(ckpt_path, device)
@@ -268,7 +238,7 @@ def run_single(cfg: dict, image_path: str | None, out_dir: str | None, device: t
 
 def run_test(cfg: dict, device: torch.device):
     """测试集评估：遍历 `images/test`，累积 DetectionMetrics 并保存逐图预测与总体指标。"""
-    ckpt_path = cfg["ckpt_path"] or find_latest_checkpoint(cfg["train_log_dir"]) or ""
+    ckpt_path = cfg["ckpt_path"] or ""
     if not ckpt_path:
         raise SystemExit("未找到权重文件，请在 predict.ckpt_path 指定或训练后再试")
     model = load_model(ckpt_path, device)
