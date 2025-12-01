@@ -330,12 +330,15 @@ def main():
         description="YOLOv1_QR 推理与测试评估",
         epilog=(
             "示例:\n"
-            "  单图预测: python predict.py --config ./config.yaml --image ./dataset/images/test/sample.jpg --out ./predictions/single\n"
-            "  测试评估: python predict.py --config ./config.yaml --test"
+            "  单图预测:\n"
+            "    python predict.py --config ./config.yaml --image ./dataset/images/test/sample.jpg --out ./predictions/single\n"
+            "  测试评估:\n"
+            "    python predict.py --config ./config.yaml --test\n"
         ),
+        formatter_class=argparse.RawTextHelpFormatter
     )
     parser.add_argument("--config", type=str, default="./config.yaml", help="配置文件路径")
-    parser.add_argument("--image", type=str, default=None, help="单图预测的图片路径，若省略则使用配置中的 image_path")
+    parser.add_argument("--image", type=str, default=None, help="单图预测的图片路径")
     parser.add_argument("--out", type=str, default=None, help="单图预测输出目录，若省略则使用配置中的 out_dir")
     parser.add_argument("--test", action="store_true", help="运行测试集评估（忽略 --image/--out）")
     parser.add_argument("--test-batch-size", type=int, default=None, help="测试评估的批量大小，默认读取配置或 64")
